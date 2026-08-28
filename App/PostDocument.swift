@@ -80,6 +80,7 @@ final class PostDocument: Document {
     static var writableContentTypes: [UTType] { [.swiftWriterPost] }
 
     func writer(configuration: sending WriteConfiguration) -> sending FileWrapperDocumentWriter<PostSnapshot> {
+        documentLog.notice("writer requested for \(configuration.contentType.identifier, privacy: .public)")
         let urlConfiguration = self.configuration
         return FileWrapperDocumentWriter(configuration) { snapshot, previous in
             // Images read from disk stay `.existing` and carry no bytes, so writing needs
@@ -90,8 +91,18 @@ final class PostDocument: Document {
             if previous == nil, let url = await MainActor.run(body: { urlConfiguration?.fileURL }) {
                 previous = try? FileWrapper(url: url)
             }
-            documentLog.notice("writer: \(snapshot.post.assets.count, privacy: .public) assets, previous: \(previous == nil ? "none" : "some", privacy: .public)")
-            return try PostPackage.makeFileWrapper(from: snapshot, previous: previous)
+            let alt = snapshot.post.referencedImageIDs
+                .compactMap { snapshot.post.assets[$0]?.altText }
+                .count { !$0.isEmpty }
+            documentLog.notice("writer: \(snapshot.post.assets.count, privacy: .public) assets, \(alt, privacy: .public) with alt text, previous: \(previous == nil ? "none" : "some", privacy: .public)")
+            do {
+                return try PostPackage.makeFileWrapper(from: snapshot, previous: previous)
+            } catch {
+                // SwiftUI can swallow a write failure, which is how a save looks like a
+                // no-op rather than an error. Say so before rethrowing.
+                documentLog.error("writer failed: \(String(describing: error), privacy: .public)")
+                throw error
+            }
         }
     }
 
