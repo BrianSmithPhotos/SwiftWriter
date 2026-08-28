@@ -37,18 +37,11 @@ final class ImageLoader {
         defer { inFlight.remove(key) }
 
         let decoded = await Task.detached(priority: .userInitiated) { () -> CGImage? in
-            do {
-                switch location {
-                case .memory(let data):
-                    return try Thumbnail.make(data: data, maxPixelSize: maxPixelSize)
-                case .file(let url):
-                    return try Thumbnail.make(contentsOf: url, maxPixelSize: maxPixelSize)
-                }
-            } catch {
-                // A failed decode otherwise shows as a silent grey placeholder, which says
-                // nothing about whether the file is missing, unreadable or not an image.
-                documentLog.error("image \(imageID.rawValue, privacy: .public) failed to load: \(String(describing: error), privacy: .public)")
-                return nil
+            switch location {
+            case .memory(let data):
+                try? Thumbnail.make(data: data, maxPixelSize: maxPixelSize)
+            case .file(let url):
+                try? Thumbnail.make(contentsOf: url, maxPixelSize: maxPixelSize)
             }
         }.value
 

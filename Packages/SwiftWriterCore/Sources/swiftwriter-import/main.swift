@@ -173,6 +173,12 @@ func verifyPackages(in directory: URL) throws {
             if snapshot.publishRecords.isEmpty {
                 failures.append("\(name): no publish record")
             }
+            // The recorded hash is what tells the editor "published, then edited". A freshly
+            // imported post has not been edited, so it must match what is on disk - it did
+            // not when the hash was taken before the images were fetched.
+            for record in snapshot.publishRecords where record.contentHash != (try? snapshot.post.contentHash()) {
+                failures.append("\(name): recorded hash does not match the post on disk")
+            }
         } catch {
             failures.append("\(name): \(error)")
         }
