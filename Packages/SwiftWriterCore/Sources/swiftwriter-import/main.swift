@@ -39,6 +39,7 @@ if let output = arguments.output, !arguments.dryRun {
 var reports: [PostImportReport] = []
 var writtenNames: Set<String> = []
 var failedImages: [String] = []
+var skipped: [String] = []
 var passedThroughCount = 0
 var resizedCount = 0
 
@@ -49,6 +50,17 @@ for item in selected {
     if arguments.dryRun {
         print("\(label)  [\(imported.report.imageCount) images]")
         reports.append(imported.report)
+        continue
+    }
+
+    // A package is an editable document once written, and re-importing would silently
+    // discard alt text and captions typed in the app. Overwriting has to be asked for.
+    // The name is reserved either way, so a skip cannot shift a later post onto it.
+    let name = uniqueName(for: item, taken: &writtenNames)
+    let url = arguments.output!.appending(path: "\(name).\(PostPackage.fileExtension)")
+    if !arguments.force, FileManager.default.fileExists(atPath: url.path) {
+        print("\(label)  [kept, already imported]")
+        skipped.append(name)
         continue
     }
 
@@ -123,8 +135,6 @@ for item in selected {
         publishRecords: [imported.publishRecord],
         images: sources
     )
-    let name = uniqueName(for: item, taken: &writtenNames)
-    let url = arguments.output!.appending(path: "\(name).\(PostPackage.fileExtension)")
     try PostPackage.makeFileWrapper(from: snapshot, previous: nil)
         .write(to: url, options: .atomic, originalContentsURL: nil)
 
@@ -258,6 +268,9 @@ func printSummary() async {
     if !failedImages.isEmpty {
         print("failed downloads      \(failedImages.count)")
         for failure in failedImages.prefix(10) { print("    \(failure)") }
+    }
+    if !skipped.isEmpty {
+        print("already imported      \(skipped.count) - kept, pass --force to overwrite")
     }
     print("elapsed               \(Int(Date.now.timeIntervalSince(started)))s")
 }

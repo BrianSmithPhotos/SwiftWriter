@@ -13,6 +13,7 @@ struct Arguments {
     var concurrency = 6
     var dryRun = false
     var verify = false
+    var force = false
 
     static let usage = """
     swiftwriter-import - read a WordPress WXR export into .swiftpost documents
@@ -27,6 +28,7 @@ struct Arguments {
       --concurrency <n>     parallel image downloads (default 6)
       --dry-run             parse and report, fetch nothing, write nothing
       --verify              read every written package back and check it round-trips
+      --force               overwrite packages that already exist, discarding any edits
     """
 
     static func parse(_ arguments: [String]) throws -> Arguments {
@@ -39,7 +41,7 @@ struct Arguments {
                 throw ArgumentError.message("Unexpected argument: \(argument)")
             }
             let name = String(argument.dropFirst(2))
-            if name == "dry-run" || name == "verify" || name == "help" {
+            if name == "dry-run" || name == "verify" || name == "force" || name == "help" {
                 flags.insert(name)
                 index += 1
                 continue
@@ -56,7 +58,8 @@ struct Arguments {
 
         var parsed = Arguments(input: URL(filePath: input))
         parsed.dryRun = flags.contains("dry-run")
-    parsed.verify = flags.contains("verify")
+        parsed.verify = flags.contains("verify")
+        parsed.force = flags.contains("force")
         parsed.output = values["output"].map { URL(filePath: $0) }
         parsed.cache = values["cache"].map { URL(filePath: $0) }
         parsed.siteID = values["site"] ?? ""
