@@ -31,10 +31,12 @@ case "doc":
 default:
     // A tile per variant, with the small sizes under each - which is where a
     // design either survives or does not.
-    let entries = Variant.allCases.map {
-        ContactSheet.Entry(name: $0.rawValue, artwork: artwork($0))
+    // How much air the mark leaves is the thing that is hard to judge at 1024 and
+    // obvious in the Dock, so the sheet compares candidates rather than variants.
+    let entries = [0.0, 0.06, 0.085, 0.12].map { inset in
+        ContactSheet.Entry(name: "inset \(inset)", artwork: artwork(.photo, inset: inset))
     }
-    try Icon.writePNG(ContactSheet.render(entries, palette: .teal, columns: 2),
+    try Icon.writePNG(ContactSheet.render(entries, palette: .teal, columns: 4),
                       to: out.appendingPathComponent("icon-variants.png"))
     print("wrote icon-variants.png to \(out.path)")
 }

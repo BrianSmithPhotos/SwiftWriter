@@ -31,7 +31,15 @@ func roundedLine(_ rect: CGRect) -> CGPath {
     CGPath(roundedRect: rect, cornerWidth: rect.height / 2, cornerHeight: rect.height / 2, transform: nil)
 }
 
-func drawPage(_ ctx: CGContext, in rect: CGRect, palette: Palette, variant: Variant) {
+/// How much air to leave around the mark, as a fraction of the tile. Every size
+/// inside the mark is a fraction of the rect it is handed, so insetting that rect
+/// is the whole adjustment - the proportions come through unchanged.
+let markInset: CGFloat = 0.085
+
+func drawPage(_ ctx: CGContext, in full: CGRect, palette: Palette, variant: Variant, inset: CGFloat) {
+    // A mark drawn to the edges reads as stuffed in the Dock, where every icon
+    // around it leaves the same air.
+    let rect = full.insetBy(dx: full.width * inset, dy: full.height * inset)
     let lineHeight = rect.height * 0.082
     let pitch = rect.height * 0.158
     let left = rect.minX + rect.width * 0.10
@@ -75,8 +83,10 @@ func drawPage(_ ctx: CGContext, in rect: CGRect, palette: Palette, variant: Vari
     }
 }
 
-func artwork(_ variant: Variant) -> Artwork {
-    { ctx, rect, palette in drawPage(ctx, in: rect, palette: palette, variant: variant) }
+func artwork(_ variant: Variant, inset: CGFloat = markInset) -> Artwork {
+    { ctx, rect, palette in
+        drawPage(ctx, in: rect, palette: palette, variant: variant, inset: inset)
+    }
 }
 
 /// What ships.
