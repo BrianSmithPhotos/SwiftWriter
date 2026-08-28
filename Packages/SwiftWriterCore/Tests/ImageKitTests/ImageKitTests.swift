@@ -171,3 +171,30 @@ struct WebDerivativeTests {
         #expect(facts.capture.camera == "FUJIFILM X-T5")
     }
 }
+
+@Suite("Thumbnails")
+struct ThumbnailTests {
+    @Test("A thumbnail is downsampled to the requested long edge")
+    func downsamples() throws {
+        let data = try makeJPEG(width: 3000, height: 1500)
+        let image = try Thumbnail.make(data: data, maxPixelSize: 400)
+        #expect(image.width == 400)
+        #expect(image.height == 200)
+    }
+
+    @Test("A thumbnail reads from a file without loading it whole")
+    func fromFile() throws {
+        let url = URL.temporaryDirectory.appending(path: "thumb-test-\(UUID().uuidString).jpg")
+        try makeJPEG(width: 2000, height: 1000).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let image = try Thumbnail.make(contentsOf: url, maxPixelSize: 500)
+        #expect(image.width == 500)
+    }
+
+    @Test("An image smaller than the limit is not upscaled")
+    func doesNotUpscale() throws {
+        let data = try makeJPEG(width: 300, height: 200)
+        let image = try Thumbnail.make(data: data, maxPixelSize: 1000)
+        #expect(image.width == 300)
+    }
+}

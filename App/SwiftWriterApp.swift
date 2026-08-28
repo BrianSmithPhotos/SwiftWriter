@@ -3,11 +3,19 @@ import SwiftUI
 
 @main
 struct SwiftWriterApp: App {
+    /// One loader for the whole app. Its cache is keyed by image id, which is unique
+    /// across documents, so open windows share decoded images rather than duplicating them.
+    @State private var imageLoader = ImageLoader()
+
     var body: some Scene {
         DocumentGroup { document in
             PostEditor(document: document)
+                .environment(document)
+                .environment(imageLoader)
         } makeDocument: { configuration, context in
-            PostDocument()
+            // The configuration is retained so images still marked .existing can be read
+            // back out of the saved package.
+            PostDocument(configuration: configuration)
         }
 
         // The iPad gets a document browser landing screen. There is no Mac equivalent -

@@ -20,10 +20,36 @@ final class PostDocument: Document {
     /// rewriting several hundred megabytes of photographs on every keystroke.
     var images: [ImageID: ImageSource]
 
-    init(post: Post = Post(title: ""), publishRecords: [PublishRecord] = [], images: [ImageID: ImageSource] = [:]) {
+    /// SwiftUI keeps this up to date as the document is saved or moved, so it is the only
+    /// reliable way to find the package on disk - which is where images still marked
+    /// `.existing` have to be read from.
+    let configuration: URLDocumentConfiguration?
+
+    init(
+        post: Post = Post(title: ""),
+        publishRecords: [PublishRecord] = [],
+        images: [ImageID: ImageSource] = [:],
+        configuration: URLDocumentConfiguration? = nil
+    ) {
         self.post = post
         self.publishRecords = publishRecords
         self.images = images
+        self.configuration = configuration
+    }
+
+    /// Where an image's bytes live right now: in memory if it was just added, otherwise
+    /// in the saved package.
+    @MainActor
+    func location(of imageID: ImageID) -> ImageLocation? {
+        switch images[imageID] {
+        case .data(let data):
+            .memory(data)
+        case .existing(let fileName):
+            configuration?.fileURL
+                .map { .file($0.appending(path: PostPackage.imagesDirectoryName).appending(path: fileName)) }
+        case nil:
+            nil
+        }
     }
 
     // MARK: - Reading
