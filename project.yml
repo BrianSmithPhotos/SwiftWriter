@@ -1,0 +1,73 @@
+name: SwiftWriter
+
+options:
+  bundleIdPrefix: photos.briansmith
+  deploymentTarget:
+    macOS: "27.0"
+    iOS: "27.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+packages:
+  SwiftWriterCore:
+    path: Packages/SwiftWriterCore
+
+targets:
+  SwiftWriter:
+    type: application
+    # One target for both platforms. The Document API and the editor are shared; the few
+    # places that differ are guarded with #if os(...).
+    supportedDestinations: [mac, iOS]
+    deploymentTarget:
+      macOS: "27.0"
+      iOS: "27.0"
+    sources:
+      - path: App
+    dependencies:
+      - package: SwiftWriterCore
+        product: PostKit
+      - package: SwiftWriterCore
+        product: ImageKit
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: SwiftWriter
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.productivity
+        ITSAppUsesNonExemptEncryption: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        UISupportsDocumentBrowser: true
+        UILaunchScreen: {}
+        # Declaring the type is what makes the Finder and the iOS document browser
+        # recognise a .swiftpost bundle as one file rather than a folder.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: photos.briansmith.swiftwriter.post
+            UTTypeDescription: SwiftWriter Post
+            UTTypeConformsTo: [com.apple.package]
+            UTTypeTagSpecification:
+              public.filename-extension: [swiftpost]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: SwiftWriter Post
+            LSItemContentTypes: [photos.briansmith.swiftwriter.post]
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+    # Signing lives in a gitignored Local.xcconfig so the Team ID stays off GitHub.
+    # Copy Local.xcconfig.example to Local.xcconfig to build.
+    configFiles:
+      Debug: Local.xcconfig
+      Release: Local.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: photos.briansmith.SwiftWriter
+        MARKETING_VERSION: "0.1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG

@@ -1,0 +1,5 @@
+// Copy to Local.xcconfig (gitignored) and fill in.
+// Your Apple Developer Team ID. Find it with:
+//   security find-certificate -c "Apple Development: YOUR NAME (XXXXXXXXXX)" -p \
+//     | openssl x509 -noout -subject | tr ',' '\n' | grep OU
+DEVELOPMENT_TEAM =
