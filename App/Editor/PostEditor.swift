@@ -3,6 +3,7 @@ import SwiftUI
 
 struct PostEditor: View {
     @Bindable var document: PostDocument
+    @Environment(\.undoManager) private var undoManager
     @State private var showInspector = true
 
     var body: some View {
@@ -53,6 +54,16 @@ struct PostEditor: View {
                     Label("Inspector", systemImage: "sidebar.trailing")
                 }
             }
+        }
+        // A document is marked edited by registering an undo action, not by mutating an
+        // @Observable property. Observation drives the views; it does not make the document
+        // dirty, so without this nothing is ever saved - on the Mac an explicit Save still
+        // wrote, which hid the problem, but the iPad has no Save and only autosaves.
+        .onChange(of: document.post) { previous, _ in
+            undoManager?.registerUndo(withTarget: document) { document in
+                document.post = previous
+            }
+            undoManager?.setActionName("Edit Post")
         }
         .navigationTitle(document.post.title.isEmpty ? "Untitled" : document.post.title)
         #if os(iOS)
