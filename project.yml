@@ -40,7 +40,12 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
+        # Both are needed for the Files-based document browser on iPad. Without
+        # LSSupportsOpeningDocumentsInPlace the system hands the app a copy in the
+        # Inbox instead of the original, so an edit saves somewhere other than the
+        # file that was opened.
         UISupportsDocumentBrowser: true
+        LSSupportsOpeningDocumentsInPlace: true
         UILaunchScreen: {}
         # Declaring the type is what makes the Finder and the iOS document browser
         # recognise a .swiftpost bundle as one file rather than a folder.
