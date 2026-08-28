@@ -17,7 +17,9 @@ targets:
     type: application
     # One target for both platforms. The Document API and the editor are shared; the few
     # places that differ are guarded with #if os(...).
-    supportedDestinations: [mac, iOS]
+    # "macOS" is the spelling xcodegen understands - "mac" is silently dropped, which
+    # leaves SUPPORTED_PLATFORMS iOS-only and makes a "platform=macOS" build a false pass.
+    supportedDestinations: [macOS, iOS]
     deploymentTarget:
       macOS: "27.0"
       iOS: "27.0"
