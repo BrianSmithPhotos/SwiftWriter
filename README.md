@@ -69,3 +69,18 @@ Copy `.env.example` to `.env` and fill it in. `.env` is never committed.
 ## Licence
 
 MIT. See `LICENSE`.
+
+## Icons
+
+The app icon and the document-page fill are drawn in code by `Tools/IconGen`,
+so the shape, the palette and the sizes stay one set of numbers rather than a
+PNG nobody can adjust. The tile comes from
+[IconForge](https://github.com/BrianSmithPhotos/IconForge), shared with SwiftProj
+and MacPhotoMaster; only `Page.swift` belongs to this app.
+
+    swift run --package-path Tools/IconGen IconGen app App/Assets.xcassets/AppIcon.appiconset
+    swift run --package-path Tools/IconGen IconGen doc App/Assets.xcassets/DocumentFill.appiconset
+    swift run --package-path Tools/IconGen IconGen sheet <dir>
+
+`sheet` lays the variants side by side with 64, 32 and 16 under each, which is
+where a design either survives or does not.
