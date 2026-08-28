@@ -52,7 +52,12 @@ targets:
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: photos.briansmith.swiftwriter.post
             UTTypeDescription: SwiftWriter Post
-            UTTypeConformsTo: [com.apple.package]
+            # com.apple.package alone marks a directory as a bundle, which is how
+            # kexts and plugins are declared - macOS still draws the document icon,
+            # but Files on iOS does not. public.composite-content is what says the
+            # directory is a document made of parts, and it is what com.apple.rtfd
+            # conforms to alongside the same UTTypeIconBackgroundName key.
+            UTTypeConformsTo: [com.apple.package, public.composite-content]
             UTTypeTagSpecification:
               public.filename-extension: [swiftpost]
             # Without this macOS composes a document icon itself: a blank page with
