@@ -194,8 +194,9 @@ public enum PostImporter {
             scheduledFor: status == .scheduled ? item.postDate : nil,
             uploadedAt: item.postDate,
             publishedAt: status == .published ? item.postDate : nil,
-            lastSyncedAt: .now,
-            contentHash: try? post.contentHash()
+            lastSyncedAt: .now
+            // contentHash is deliberately left nil. The assets are not final until the
+            // images have been fetched, so the caller records the hash once they are.
         )
     }
 

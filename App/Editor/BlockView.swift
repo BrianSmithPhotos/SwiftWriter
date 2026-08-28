@@ -145,7 +145,10 @@ struct ImageDetailsEditor: View {
                         "Alt text - describe the photograph",
                         text: Binding(
                             get: { post.assets[imageID]?.altText ?? "" },
-                            set: { post.assets[imageID]?.altText = $0 }
+                            set: {
+                                post.assets[imageID]?.altText = $0
+                                documentLog.notice("altText set on \(imageID.rawValue, privacy: .public) to \($0.count, privacy: .public) characters")
+                            }
                         ),
                         axis: .vertical
                     )

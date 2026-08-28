@@ -112,6 +112,12 @@ for item in selected {
     imported.report.imageCount = imported.post.assets.count
     imported.report.imagesWithoutAltText = imported.post.imagesNeedingAltText.count
 
+    // The hash has to be taken here, not in the importer. Downloading each image rewrites
+    // its asset - real file extension, pixel size, EXIF, an IPTC caption - and all of that
+    // is inside the hash, so a hash taken before the fetch could never match the package
+    // that ends up on disk, and every imported post would open looking edited.
+    imported.publishRecord.contentHash = try? imported.post.contentHash()
+
     let snapshot = PostSnapshot(
         post: imported.post,
         publishRecords: [imported.publishRecord],

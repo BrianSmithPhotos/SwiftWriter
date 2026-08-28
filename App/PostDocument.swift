@@ -1,4 +1,5 @@
 import Foundation
+import os
 import PostKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -10,6 +11,10 @@ import UniformTypeIdentifiers
 /// codec to the reader and writer, so the app has no format logic of its own.
 ///
 /// It is a class, not a struct, because `DocumentGroup` requires `Document: Observable`.
+/// Temporary instrumentation for the Phase 3 save investigation. Read it with
+/// `log stream --predicate 'subsystem == "photos.briansmith.SwiftWriter"'`.
+let documentLog = Logger(subsystem: "photos.briansmith.SwiftWriter", category: "document")
+
 @Observable
 final class PostDocument: Document {
     var post: Post
@@ -64,6 +69,7 @@ final class PostDocument: Document {
 
     @MainActor
     func apply(snapshot: sending PostSnapshot, previous: sending PostSnapshot?) async throws {
+        documentLog.notice("apply: \(snapshot.post.title, privacy: .public), previous: \(previous == nil ? "none" : "some", privacy: .public), url: \(self.configuration?.fileURL?.lastPathComponent ?? "nil", privacy: .public)")
         post = snapshot.post
         publishRecords = snapshot.publishRecords
         images = snapshot.images
@@ -74,13 +80,25 @@ final class PostDocument: Document {
     static var writableContentTypes: [UTType] { [.swiftWriterPost] }
 
     func writer(configuration: sending WriteConfiguration) -> sending FileWrapperDocumentWriter<PostSnapshot> {
-        FileWrapperDocumentWriter(configuration) { snapshot, previous in
-            try PostPackage.makeFileWrapper(from: snapshot, previous: previous)
+        let urlConfiguration = self.configuration
+        return FileWrapperDocumentWriter(configuration) { snapshot, previous in
+            // Images read from disk stay `.existing` and carry no bytes, so writing needs
+            // the package they came from. The framework supplies it when saving in place,
+            // but not always - and without it every photograph would be missing, so the
+            // codec refuses to write. Fall back to the package's own URL.
+            var previous = previous
+            if previous == nil, let url = await MainActor.run(body: { urlConfiguration?.fileURL }) {
+                previous = try? FileWrapper(url: url)
+            }
+            documentLog.notice("writer: \(snapshot.post.assets.count, privacy: .public) assets, previous: \(previous == nil ? "none" : "some", privacy: .public)")
+            return try PostPackage.makeFileWrapper(from: snapshot, previous: previous)
         }
     }
 
     @MainActor
     func snapshot(contentType: UTType) async throws -> sending PostSnapshot {
-        PostSnapshot(post: post, publishRecords: publishRecords, images: images)
+        let alt = post.referencedImageIDs.compactMap { post.assets[$0]?.altText }.filter { !$0.isEmpty }
+        documentLog.notice("snapshot: \(alt.count, privacy: .public) of \(self.post.assets.count, privacy: .public) assets have alt text")
+        return PostSnapshot(post: post, publishRecords: publishRecords, images: images)
     }
 }
