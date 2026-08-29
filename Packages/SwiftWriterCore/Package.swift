@@ -35,6 +35,10 @@ let package = Package(
             dependencies: ["PostKit", "ImageKit", "WXRImport"]
         ),
         .executableTarget(
+            name: "swiftwriter-alt",
+            dependencies: ["PostKit", "AltTextKit"]
+        ),
+        .executableTarget(
             name: "swiftwriter-publish",
             dependencies: ["PostKit", "BlogPublishing", "WordPressProvider"]
         ),
