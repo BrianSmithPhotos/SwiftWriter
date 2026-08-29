@@ -61,6 +61,28 @@ struct GutenbergParserTests {
         #expect(imageID == image.id)
     }
 
+    @Test("An image block carries its width back into the layout",
+          arguments: [
+              ("{\"id\":1,\"align\":\"wide\",\"sizeSlug\":\"large\"}", ImageLayout.wide),
+              ("{\"id\":1,\"align\":\"full\",\"sizeSlug\":\"large\"}", ImageLayout.wide),
+              ("{\"id\":1,\"sizeSlug\":\"large\"}", ImageLayout.full),
+              ("{\"id\":1,\"sizeSlug\":\"medium\"}", ImageLayout.inline),
+          ])
+    func imageLayout(attributes: String, expected: ImageLayout) {
+        // Without this the importer flattened every photograph to the content width, so a
+        // post that ran an image wide came back looking narrower than the one on the blog.
+        let parsed = GutenbergParser.parse("""
+        <!-- wp:image \(attributes) -->
+        <figure class="wp-block-image"><img src="https://example.com/a.jpeg" alt="A field"/></figure>
+        <!-- /wp:image -->
+        """)
+        guard case .image(_, let layout) = parsed.blocks.first?.kind else {
+            Issue.record("expected an image block")
+            return
+        }
+        #expect(layout == expected)
+    }
+
     @Test("A gallery collects its nested images in order")
     func galleryBlock() {
         let parsed = GutenbergParser.parse("""

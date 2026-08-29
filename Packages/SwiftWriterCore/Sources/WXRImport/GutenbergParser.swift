@@ -146,7 +146,7 @@ public enum GutenbergParser {
 
             case "image":
                 if let image = parseImage(raw, into: &context) {
-                    blocks.append(Block(kind: .image(imageID: image, layout: .full)))
+                    blocks.append(Block(kind: .image(imageID: image, layout: layout(of: raw))))
                 }
 
             case "gallery":
@@ -204,6 +204,20 @@ public enum GutenbergParser {
             }
         }
         return blocks
+    }
+
+    /// How wide the block editor was told to draw the image.
+    ///
+    /// An image with no `align` sits at the content width, which is what `.full` means here -
+    /// the name predates the WordPress vocabulary, where `alignfull` is the bleed-to-the-edge
+    /// one. Both of the WordPress widths map onto `.wide`, since the format has one. Size is
+    /// what separates the two unaligned cases: the editor writes `sizeSlug` "medium" for an
+    /// image meant to sit small in the text.
+    private static func layout(of raw: RawBlock) -> ImageLayout {
+        switch raw.attributes["align"] as? String {
+        case "wide", "full": return .wide
+        default: return raw.attributes["sizeSlug"] as? String == "medium" ? .inline : .full
+        }
     }
 
     private static func parseImage(_ raw: RawBlock, into context: inout Context) -> ImageID? {
