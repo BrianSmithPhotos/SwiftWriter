@@ -20,24 +20,12 @@ enum Commands {
         )
         let state = WordPressOAuth.makeState()
 
+        let redirectURI = try environment.require("WORDPRESS_REDIRECT_URI")
         print("Open this in a browser and approve it:\n")
         print(flow.authorizationURL(state: state, blogID: siteID).absoluteString)
-        print("""
+        print("")
 
-        The browser will then try to open swiftwriter://oauth/wordpress?code=...
-        It may show an error - that is fine, the address is what matters.
-        Copy that whole address and paste it here.
-
-        """)
-        print("Redirect address: ", terminator: "")
-        // stdout is fully buffered whenever it is not a terminal, so without this the URL and
-        // this prompt sit unseen in the buffer while readLine waits - which reads as a hang.
-        // The trailing prompt needs it even on a terminal, being line-buffered with no newline.
-        fflush(stdout)
-        guard let line = readLine(strippingNewline: true), !line.isEmpty,
-              let redirect = URL(string: line.trimmingCharacters(in: .whitespaces)) else {
-            throw CLIError.message("No address pasted.")
-        }
+        let redirect = try await waitForRedirect(to: redirectURI)
 
         let code = try flow.code(fromRedirect: redirect, expecting: state)
         let token = try await flow.exchange(code: code)
@@ -48,6 +36,49 @@ enum Commands {
         }
         try store.save(token, siteID: siteID)
         print("Stored a token for site \(siteID) in the Keychain.")
+    }
+
+
+    /// Listens for the redirect when it comes back to loopback, and falls back to asking for it
+    /// to be pasted when it does not.
+    ///
+    /// A custom scheme cannot work here. Nothing registers `swiftwriter://`, so the browser has
+    /// nowhere to send the redirect and stops without changing the address bar, leaving nothing
+    /// to copy. Loopback is the flow a command-line tool can actually receive.
+    private static func waitForRedirect(to redirectURI: String) async throws -> URL {
+        guard let uri = URL(string: redirectURI),
+              uri.scheme == "http",
+              let host = uri.host(), host == "localhost" || host == "127.0.0.1",
+              let port = uri.port.flatMap({ UInt16(exactly: $0) })
+        else {
+            // Whatever is registered is not something this tool can be redirected to. Ask for
+            // the address, which at least works when the browser does land somewhere visible.
+            print("""
+            The redirect goes to \(redirectURI), which this tool cannot receive.
+            Approve it, then copy the address the browser ends up at and paste it here.
+            If the browser stops without changing address, register a loopback redirect
+            such as http://localhost:8722/callback instead.
+
+            """)
+            print("Redirect address: ", terminator: "")
+            // stdout is fully buffered when it is not a terminal, so without this the prompt
+            // sits unseen while readLine waits - which reads as a hang.
+            fflush(stdout)
+            guard let line = readLine(strippingNewline: true), !line.isEmpty,
+                  let pasted = URL(string: line.trimmingCharacters(in: .whitespaces)) else {
+                throw CLIError.message("No address pasted.")
+            }
+            return pasted
+        }
+
+        print("Waiting for the browser on \(redirectURI) ...")
+        fflush(stdout)
+        let listener = LoopbackListener(port: port)
+        // Off the cooperative pool: the listener blocks in poll and must not hold a thread
+        // that other work needs.
+        return try await Task.detached(priority: .userInitiated) {
+            try listener.waitForRedirect(timeoutSeconds: 300)
+        }.value
     }
 
     // MARK: - status
