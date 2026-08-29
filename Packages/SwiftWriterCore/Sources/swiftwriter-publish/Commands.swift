@@ -30,6 +30,10 @@ enum Commands {
 
         """)
         print("Redirect address: ", terminator: "")
+        // stdout is fully buffered whenever it is not a terminal, so without this the URL and
+        // this prompt sit unseen in the buffer while readLine waits - which reads as a hang.
+        // The trailing prompt needs it even on a terminal, being line-buffered with no newline.
+        fflush(stdout)
         guard let line = readLine(strippingNewline: true), !line.isEmpty,
               let redirect = URL(string: line.trimmingCharacters(in: .whitespaces)) else {
             throw CLIError.message("No address pasted.")
