@@ -47,12 +47,24 @@ struct AltTextServiceTests {
         #expect(AltTextService.prompt(for: request).contains("Never mention the camera"))
     }
 
-    @Test("The caption is given as identification, and as something not to repeat")
+    @Test("The caption is given as identification, not as an answer to copy out")
     func captionIsContextNotAnAnswer() {
         let prompt = AltTextService.prompt(for: AltTextRequest(asset: osprey()))
         #expect(prompt.contains("Osprey, Pandion haliaetus"))
-        #expect(prompt.contains("do not "))
-        #expect(prompt.contains("repeat it"))
+        #expect(prompt.contains("do not restate the caption word for word"))
+        // A caption on this blog names the subject or only the place, and the two need opposite
+        // handling - told to name a subject regardless, the model invents one to suit the place.
+        #expect(prompt.contains("names either the subject or only the place"))
+        #expect(prompt.contains("use the place as the setting"))
+    }
+
+    @Test("Inventing what is not in the frame is forbidden outright")
+    func inventionIsForbidden() {
+        // Proved on a real photograph: captioned "North Peak trail, Mt Diablo", an empty ridge
+        // above the fog came back as "a small group of hikers walks along the trail". Nothing in
+        // the alt text of a photograph is checkable by the reader it is written for.
+        let prompt = AltTextService.prompt(for: AltTextRequest(asset: osprey()))
+        #expect(prompt.contains("Never mention a person, animal or object that is not in the frame"))
     }
 
     @Test("An image with no caption and no metadata still gets a usable prompt")

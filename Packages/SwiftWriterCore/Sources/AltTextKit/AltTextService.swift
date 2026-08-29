@@ -60,6 +60,11 @@ public struct AltTextService: Sendable {
             "Write alt text for this photograph, for a reader who cannot see it.",
             "One sentence, at most \(wordLimit) words, plain English, no markdown.",
             "Describe what is actually visible: the subject, what it is doing, and where it is.",
+            // The failure that matters. Given the caption "North Peak trail, Mt Diablo" on an empty
+            // ridge above the fog, the model wrote "a small group of hikers walks along the trail" -
+            // fluent, confident and untrue. Alt text is the one place a reader cannot check.
+            "Never mention a person, animal or object that is not in the frame. If you cannot tell "
+                + "what something is, describe how it looks rather than naming it.",
             // Screen readers announce that it is an image before reading the text, so the words are
             // spent twice over.
             "Do not begin with \"image of\", \"photo of\" or \"a photograph of\".",
@@ -67,10 +72,19 @@ public struct AltTextService: Sendable {
             "Never mention the camera, the lens or the exposure settings.",
         ]
         if !request.caption.isEmpty {
+            // A caption on this blog is either the subject ("Osprey, Pandion haliaetus") or the
+            // place ("North Peak trail, Mt Diablo"), and the two need opposite handling: name the
+            // first, and treat the second as the setting only. Told to "name the subject"
+            // regardless, the model invents one that would suit the place.
             lines.append(
-                "The photographer captioned it: \(request.caption). Trust that identification over "
-                    + "your own guess. The caption is printed beneath the photograph, so do not "
-                    + "simply repeat it - describe what a reader would otherwise be missing.")
+                "The photographer captioned it: \(request.caption). That caption names either the "
+                    + "subject or only the place. If it names a kind of bird, animal, plant or "
+                    + "object and one of those is in the frame, you must call it by that name - it "
+                    + "is the most useful word in the sentence, so never fall back to a vaguer word "
+                    + "like \"bird\" or \"flower\". If it names only a place, describe whatever is "
+                    + "actually in the frame and use the place as the setting, without assuming "
+                    + "anything is happening there. Either way, do not restate the caption word for "
+                    + "word and do not give a scientific name.")
         }
         if !request.keywords.isEmpty {
             lines.append(
