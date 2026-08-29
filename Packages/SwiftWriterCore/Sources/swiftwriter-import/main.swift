@@ -32,6 +32,12 @@ let store = ImageStore(
 )
 let derivativeSettings = DerivativeSettings(maxLongEdge: arguments.maxLongEdge)
 
+// The blog serves 1280px copies, so importing from its own URLs can never reach 2048. When
+// the camera originals are to hand they are read from disk instead, and only what is missing
+// is downloaded.
+let originals = try arguments.originals.map(OriginalsLibrary.init(directory:))
+if let originals { print("  \(originals.count) originals available\n") }
+
 if let output = arguments.output, !arguments.dryRun {
     try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
 }
@@ -41,6 +47,7 @@ var writtenNames: Set<String> = []
 var failedImages: [String] = []
 var skipped: [String] = []
 var passedThroughCount = 0
+var fromOriginals = 0
 var resizedCount = 0
 
 for item in selected {
@@ -64,9 +71,25 @@ for item in selected {
         continue
     }
 
-    // Fetch every image for this post at once, then fold the results back in order.
-    let fetches = imported.images.compactMap { image in image.sourceURL.map { (image.id, $0) } }
+    // Anything found on disk is read here; only the rest is fetched over the network.
     var fetched: [ImageID: Data] = [:]
+    var localIDs: Set<ImageID> = []
+    if let originals {
+        for image in imported.images {
+            guard let uploaded = imported.post.assets[image.id]?.provenance.originalFileName,
+                  let url = originals.original(forUploadedFileName: uploaded),
+                  let data = try? Data(contentsOf: url)
+            else { continue }
+            fetched[image.id] = data
+            localIDs.insert(image.id)
+            fromOriginals += 1
+        }
+    }
+
+    // Fetch the rest at once, then fold the results back in order.
+    let fetches = imported.images
+        .filter { !localIDs.contains($0.id) }
+        .compactMap { image in image.sourceURL.map { (image.id, $0) } }
     await withTaskGroup(of: (ImageID, Data?, String?).self) { group in
         var running = 0
         var pending = fetches[...]
@@ -258,6 +281,7 @@ func printSummary() async {
     print("posts with a hero     \(reports.count { $0.hasHeroImage })/\(reports.count)")
     print("posts with a summary  \(reports.count { $0.hasSummary })/\(reports.count)")
     if !arguments.dryRun {
+        if fromOriginals > 0 { print("images from originals \(fromOriginals)") }
         print("images downloaded     \(await store.downloaded)")
         print("images from cache     \(await store.servedFromCache)")
         print("  kept as-is          \(passedThroughCount)")

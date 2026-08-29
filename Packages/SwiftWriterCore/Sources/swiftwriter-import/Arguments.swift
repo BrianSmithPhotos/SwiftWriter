@@ -6,6 +6,7 @@ struct Arguments {
     var input: URL
     var output: URL?
     var cache: URL?
+    var originals: URL?
     var since: Date?
     var siteID: String = ""
     var limit: Int?
@@ -21,6 +22,7 @@ struct Arguments {
       --input <file>        WXR export XML (required)
       --output <dir>        where to write the packages (required unless --dry-run)
       --cache <dir>         downloaded image cache (default: <output>/.image-cache)
+      --originals <dir>     camera originals, used in place of the 1280px blog copies
       --since <YYYY-MM-DD>  only import posts on or after this date
       --site <id>           site id recorded in publishing.json
       --limit <n>           stop after n posts
@@ -62,6 +64,7 @@ struct Arguments {
         parsed.force = flags.contains("force")
         parsed.output = values["output"].map { URL(filePath: $0) }
         parsed.cache = values["cache"].map { URL(filePath: $0) }
+        parsed.originals = values["originals"].map { URL(filePath: $0) }
         parsed.siteID = values["site"] ?? ""
         parsed.limit = values["limit"].flatMap(Int.init)
         parsed.maxLongEdge = values["max-long-edge"].flatMap(Int.init) ?? parsed.maxLongEdge
