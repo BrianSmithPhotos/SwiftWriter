@@ -111,6 +111,10 @@ func run(_ arguments: Arguments) async throws {
                 print("  \(caption.isEmpty ? asset.fileName : caption)")
                 print("    FAILED: \(error.localizedDescription)")
             }
+            // Flushed per photograph because the run is slow and usually redirected to a log:
+            // stdout is fully buffered when it is not a terminal, so without this nothing at
+            // all appears until the last image is done.
+            fflush(stdout)
             remaining = remaining.map { $0 - 1 }
         }
         print("")
