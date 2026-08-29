@@ -111,7 +111,7 @@ for item in selected {
     }
 
     var sources: [ImageID: ImageSource] = [:]
-    // What the blog already holds for each image, so a republish updates the existing
+    // What the blog already holds, byte for byte, so a republish updates the existing
     // attachment instead of uploading a second copy of a photograph that is already live.
     var uploaded: [ImageID: UploadedMedia] = [:]
     for image in imported.images {
@@ -141,10 +141,16 @@ for item in selected {
         imported.post.assets[image.id] = asset
         sources[image.id] = .data(derivative.data)
 
+        // Only an image taken from the blog and kept byte for byte can be claimed as held.
+        // A derivative built from a camera original is a better picture than the one that is
+        // live, and recording it here would claim the blog already had it - so the larger
+        // image would never go up. Left out of the map, it uploads on the next publish.
+        //
         // The alt text and caption recorded are the blog's own, not the asset's: the asset
         // may since have taken an IPTC caption the attachment has never been told about,
         // and that difference is exactly what should be sent on the next publish.
-        if let remoteID = image.wordPressID, let sourceURL = image.sourceURL {
+        if !localIDs.contains(image.id), derivative.passedThrough,
+           let remoteID = image.wordPressID, let sourceURL = image.sourceURL {
             uploaded[image.id] = UploadedMedia(
                 remoteID: remoteID,
                 url: sourceURL,

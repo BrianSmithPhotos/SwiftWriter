@@ -12,6 +12,9 @@ public enum PublishStatus: String, Codable, Sendable, CaseIterable {
 /// Remembered so that republishing a post - which is what adding alt text to a live post
 /// means - does not upload thirty-four photographs a second time and leave the media
 /// library full of duplicates.
+///
+/// An entry claims the provider holds these exact bytes. A package that has since taken a
+/// better copy from the camera original is therefore not held, and uploads.
 public struct UploadedMedia: Codable, Sendable, Equatable {
     /// The provider's own id for the attachment.
     public var remoteID: String
