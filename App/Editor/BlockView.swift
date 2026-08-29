@@ -134,6 +134,9 @@ struct ImageDetailsEditor: View {
     let imageID: ImageID
     @Binding var post: Post
 
+    @Environment(PostDocument.self) private var document
+    @Environment(AltTextWriter.self) private var writer
+
     var body: some View {
         if let asset = post.assets[imageID] {
             VStack(alignment: .leading, spacing: 4) {
@@ -150,6 +153,7 @@ struct ImageDetailsEditor: View {
                         axis: .vertical
                     )
                     .font(.caption)
+                    describeButton
                 }
                 TextField(
                     "Caption",
@@ -163,6 +167,41 @@ struct ImageDetailsEditor: View {
                 .foregroundStyle(.secondary)
             }
             .textFieldStyle(.plain)
+        }
+    }
+
+    /// Writes the alt text for this one photograph.
+    ///
+    /// One image at a time rather than a "describe everything" button: the model takes twenty
+    /// seconds or so per photograph, and every line still has to be read against the picture
+    /// before it goes out. A whole post at once belongs in the CLI, which is where it already is.
+    @ViewBuilder
+    private var describeButton: some View {
+        Button {
+            describe()
+        } label: {
+            if writer.working.contains(imageID) {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "wand.and.sparkles")
+            }
+        }
+        .buttonStyle(.borderless)
+        .font(.caption)
+        .disabled(writer.working.contains(imageID) || writer.unavailable != nil)
+        .help(writer.unavailable ?? "Describe this photograph with \(writer.backend?.rawValue ?? "the local model")")
+    }
+
+    private func describe() {
+        guard let asset = post.assets[imageID], let location = document.location(of: imageID) else { return }
+        Task {
+            // Read off the main actor: a 2048px JPEG is a megabyte, and the editor should not
+            // stutter to fetch it.
+            guard let bytes = await Task.detached(priority: .userInitiated, operation: { location.bytes() }).value
+            else { return }
+            if let text = await writer.describe(asset, bytes: bytes) {
+                post.assets[imageID]?.altText = text
+            }
         }
     }
 }

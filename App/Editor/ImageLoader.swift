@@ -7,6 +7,15 @@ import SwiftUI
 enum ImageLocation: Equatable {
     case memory(Data)
     case file(URL)
+
+    /// The bytes as they are stored, for anything that needs the file itself rather than a
+    /// decoded thumbnail - alt text is written from the JPEG, not from what is on screen.
+    func bytes() -> Data? {
+        switch self {
+        case .memory(let data): data
+        case .file(let url): try? Data(contentsOf: url)
+        }
+    }
 }
 
 /// Decodes package images at display size and remembers them.

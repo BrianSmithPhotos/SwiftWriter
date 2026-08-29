@@ -30,6 +30,8 @@ targets:
         product: PostKit
       - package: SwiftWriterCore
         product: ImageKit
+      - package: SwiftWriterCore
+        product: AltTextKit
     info:
       path: App/Info.plist
       properties:

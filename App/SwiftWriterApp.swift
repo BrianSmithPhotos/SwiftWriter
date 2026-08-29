@@ -6,12 +6,14 @@ struct SwiftWriterApp: App {
     /// One loader for the whole app. Its cache is keyed by image id, which is unique
     /// across documents, so open windows share decoded images rather than duplicating them.
     @State private var imageLoader = ImageLoader()
+    @State private var altTextWriter = AltTextWriter()
 
     var body: some Scene {
         DocumentGroup { document in
             PostEditor(document: document)
                 .environment(document)
                 .environment(imageLoader)
+                .environment(altTextWriter)
         } makeDocument: { configuration, context in
             // The configuration is retained so images still marked .existing can be read
             // back out of the saved package.
