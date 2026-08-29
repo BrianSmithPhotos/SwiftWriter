@@ -9,6 +9,7 @@ let package = Package(
         .library(name: "ImageKit", targets: ["ImageKit"]),
         .library(name: "WXRImport", targets: ["WXRImport"]),
         .library(name: "BlogPublishing", targets: ["BlogPublishing"]),
+        .library(name: "AltTextKit", targets: ["AltTextKit"]),
         .library(name: "WordPressProvider", targets: ["WordPressProvider"]),
         .executable(name: "swiftwriter-import", targets: ["swiftwriter-import"]),
         .executable(name: "swiftwriter-publish", targets: ["swiftwriter-publish"]),
@@ -22,6 +23,9 @@ let package = Package(
         // Provider-neutral publishing: what a blog can do, and what happened when a post
         // met one. No networking and no provider here, so the rules are testable offline.
         .target(name: "BlogPublishing", dependencies: ["PostKit"]),
+        // Writes the alt text a photograph is missing. Pure Foundation: the prompt, the
+        // tidying and the retry, with the model behind a protocol so no backend is baked in.
+        .target(name: "AltTextKit", dependencies: ["PostKit"]),
         // WordPress: renders blocks to Gutenberg markup, and talks to public-api.wordpress.com.
         .target(name: "WordPressProvider", dependencies: ["PostKit", "BlogPublishing"]),
         // Reads a WordPress WXR export into posts. Used to seed the test corpus.
@@ -38,6 +42,7 @@ let package = Package(
         .testTarget(name: "WXRImportTests", dependencies: ["WXRImport", "PostKit"]),
         .testTarget(name: "ImageKitTests", dependencies: ["ImageKit", "PostKit"]),
         .testTarget(name: "BlogPublishingTests", dependencies: ["BlogPublishing", "PostKit"]),
+        .testTarget(name: "AltTextKitTests", dependencies: ["AltTextKit", "PostKit"]),
         // Depends on WXRImport so the renderer can be tested against the parser it inverts.
         .testTarget(
             name: "WordPressProviderTests",
