@@ -15,9 +15,12 @@ struct SwiftWriterApp: App {
                 .environment(imageLoader)
                 .environment(altTextWriter)
         } makeDocument: { configuration, context in
+            // Checked before the package is read: a post on a network share cannot be saved
+            // safely by the current write path. See DocumentLocation.
+            try DocumentLocation.check(configuration.fileURL)
             // The configuration is retained so images still marked .existing can be read
             // back out of the saved package.
-            PostDocument(configuration: configuration)
+            return PostDocument(configuration: configuration)
         }
 
         // The iPad gets a document browser landing screen. There is no Mac equivalent -
