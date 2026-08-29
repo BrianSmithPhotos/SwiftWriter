@@ -70,6 +70,16 @@ public struct Post: Codable, Sendable, Equatable {
         return ordered
     }
 
+    /// When the photographs in this post were taken - the newest of them.
+    ///
+    /// This is the date a post is backdated to once it has gone live, so the archive reads
+    /// as a record of when the walk happened rather than when it was written up. Defined as
+    /// the newest capture rather than the last image in reading order: the two agree on all
+    /// 33 posts in the corpus, and the newest one does not change when blocks are reordered.
+    public var newestCaptureDate: Date? {
+        referencedImageIDs.compactMap { assets[$0]?.capture?.captureDate }.max()
+    }
+
     /// Assets held in the package that nothing points at any more.
     public var orphanedImageIDs: [ImageID] {
         let referenced = Set(referencedImageIDs)
