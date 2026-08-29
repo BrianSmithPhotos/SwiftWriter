@@ -15,12 +15,24 @@ public struct OriginalsLibrary: Sendable {
 
     public var count: Int { filesByKey.count }
 
+    /// Reads the whole tree: a Drive folder keeps each shoot in its own subfolder, and a
+    /// flat staging folder is just the shallow case of the same walk.
     public init(directory: URL) throws {
+        guard let walk = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            throw CocoaError(.fileReadNoSuchFile)
+        }
+        let found = walk.compactMap { $0 as? URL }.filter {
+            (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+        }
         var files: [String: URL] = [:]
-        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
-        // Sorted so a duplicate key resolves to the same file on every run.
-        for name in names.sorted() where !name.hasPrefix(".") {
-            files[Self.slug(name)] = directory.appending(path: name)
+        // Sorted by path so the same photograph exported into two folders - there are a
+        // couple of dozen - resolves to the same file on every run.
+        for url in found.sorted(by: { $0.path < $1.path }) {
+            files[Self.key(url.lastPathComponent)] = url
         }
         filesByKey = files
     }
@@ -30,13 +42,35 @@ public struct OriginalsLibrary: Sendable {
         filesByKey[Self.uploadKey(name)]
     }
 
-    /// Strips what WordPress adds on upload: a `featured_` prefix on a post thumbnail, and
-    /// the `_<flickr id>_o-large` tail that comes from the Flickr export the images arrived in.
+    /// The lookup key for a local file. Not the WordPress slug itself: the same shoot is
+    /// exported as "Nov 06, 2025-..." in one folder and "November 06, 2025-..." in another,
+    /// so the month is spelled out before the two sides are compared.
+    static func key(_ name: String) -> String {
+        expandingMonth(slug(name))
+    }
+
+    private static let months = [
+        "jan": "january", "feb": "february", "mar": "march", "apr": "april",
+        "jun": "june", "jul": "july", "aug": "august", "sep": "september",
+        "sept": "september", "oct": "october", "nov": "november", "dec": "december",
+    ]
+
+    /// Only an abbreviation that opens the name and is followed by a day and a year, which
+    /// is what both naming conventions look like. Anything else is left alone.
+    static func expandingMonth(_ slug: String) -> String {
+        guard let match = slug.firstMatch(of: /^([a-z]+)-\d{1,2}-\d{4}-/),
+              let full = months[String(match.1)] else { return slug }
+        return full + slug.dropFirst(match.1.count)
+    }
+
+    /// Strips what WordPress adds on upload: a `featured_` prefix on a post thumbnail, the
+    /// `_<flickr id>_o-large` tail that comes from the Flickr export the images arrived in,
+    /// and the `-1` it appends when that name is already taken in the same month's folder.
     static func uploadKey(_ name: String) -> String {
         var stem = (name as NSString).deletingPathExtension
         if stem.hasPrefix("featured_") { stem.removeFirst("featured_".count) }
-        stem.replace(/_\d+_o(-large|-scaled)?$/, with: "")
-        return slug(stem)
+        stem.replace(/_\d+_o(-large|-scaled)?(-\d+)?$/, with: "")
+        return key(stem)
     }
 
     /// WordPress's own sanitiser: lower case, periods removed outright rather than turned
