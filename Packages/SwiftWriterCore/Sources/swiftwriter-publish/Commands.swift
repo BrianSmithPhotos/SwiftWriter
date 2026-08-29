@@ -31,8 +31,8 @@ enum Commands {
         let token = try await flow.exchange(code: code)
 
         // Catches a token granted for a different blog before anything is posted to it.
-        if let granted = token.siteID, granted != siteID {
-            throw CLIError.message("That token is for site \(granted), not \(siteID).")
+        guard token.isUsable(forSiteID: siteID) else {
+            throw CLIError.message("That token is for site \(token.siteID ?? "?"), not \(siteID).")
         }
         try store.save(token, siteID: siteID)
         print("Stored a token for site \(siteID) in the Keychain.")

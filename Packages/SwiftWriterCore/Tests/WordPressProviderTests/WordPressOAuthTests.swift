@@ -105,3 +105,30 @@ private final class SentBody: @unchecked Sendable {
         return Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
     }
 }
+
+@Suite("Deciding whether a token may post to a site")
+struct TokenSiteTests {
+    /// The grant is asked for with scope=global, and WordPress.com answers a global grant with
+    /// blog_id 0. Reading that as "a different blog" refused a good token with the genuinely
+    /// baffling "That token is for site 0, not 174606693".
+    @Test("A global token, which WordPress reports as blog 0, is good for any site")
+    func globalTokenIsAccepted() {
+        #expect(WordPressToken(accessToken: "t", siteID: "0").isUsable(forSiteID: "174606693"))
+    }
+
+    @Test("A token with no blog named at all is accepted")
+    func absentOrEmptyBlogIsAccepted() {
+        #expect(WordPressToken(accessToken: "t", siteID: nil).isUsable(forSiteID: "174606693"))
+        #expect(WordPressToken(accessToken: "t", siteID: "").isUsable(forSiteID: "174606693"))
+    }
+
+    @Test("A token for one blog still cannot post to another")
+    func aDifferentBlogIsStillRefused() {
+        #expect(!WordPressToken(accessToken: "t", siteID: "999").isUsable(forSiteID: "174606693"))
+    }
+
+    @Test("A token for this blog is good for it")
+    func theSameBlogIsAccepted() {
+        #expect(WordPressToken(accessToken: "t", siteID: "174606693").isUsable(forSiteID: "174606693"))
+    }
+}

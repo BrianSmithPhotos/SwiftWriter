@@ -116,6 +116,17 @@ public struct WordPressToken: Sendable, Equatable {
         self.siteID = siteID
         self.siteURL = siteURL
     }
+
+    /// Whether this token may be used to post to `siteID`.
+    ///
+    /// The grant is asked for with `scope=global`, and a global grant is not tied to one blog:
+    /// WordPress.com answers with `blog_id` 0. That is a token for every site the account owns,
+    /// not a token for some other site, so it is accepted. Reading 0 as "a different blog" is
+    /// what made a perfectly good token be refused with "that token is for site 0".
+    public func isUsable(forSiteID siteID: String) -> Bool {
+        guard let granted = self.siteID, !granted.isEmpty, granted != "0" else { return true }
+        return granted == siteID
+    }
 }
 
 public enum OAuthError: Error, Equatable {
