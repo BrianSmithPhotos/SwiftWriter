@@ -37,26 +37,40 @@ targets:
         CFBundleShortVersionString: "0.1"
         CFBundleVersion: "1"
         LSApplicationCategoryType: public.app-category.productivity
-        ITSAppUsesNonExemptEncryption: false
+        # Two posts side by side on the iPad. Removed briefly while bisecting the
+        # iPad document-icon problem; it was not the cause, so it is back.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
+        # Without a launch screen iOS can run the app letterboxed.
+        UILaunchScreen: {}
+        # Xcode puts this in every generated iOS Info.plist. This target writes its
+        # plist by hand (GENERATE_INFOPLIST_FILE: false), so nothing added it and it
+        # was simply missing. Xcode strips it from the macOS bundle by itself.
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
         # Both are needed for the Files-based document browser on iPad. Without
         # LSSupportsOpeningDocumentsInPlace the system hands the app a copy in the
         # Inbox instead of the original, so an edit saves somewhere other than the
         # file that was opened.
+        # INFOPLIST_KEY_* build settings are ignored when GENERATE_INFOPLIST_FILE is
+        # false, so orientations are declared here rather than in settings.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UISupportsDocumentBrowser: true
         LSSupportsOpeningDocumentsInPlace: true
-        UILaunchScreen: {}
         # Declaring the type is what makes the Finder and the iOS document browser
         # recognise a .swiftpost bundle as one file rather than a folder.
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: photos.briansmith.swiftwriter.post
             UTTypeDescription: SwiftWriter Post
-            # com.apple.package alone marks a directory as a bundle, which is how
-            # kexts and plugins are declared - macOS still draws the document icon,
-            # but Files on iOS does not. public.composite-content is what says the
-            # directory is a document made of parts, and it is what com.apple.rtfd
-            # conforms to alongside the same UTTypeIconBackgroundName key.
+            # com.apple.package marks the directory as a bundle, so the Finder and
+            # Files show one file rather than a folder. public.composite-content
+            # says it is a document made of parts; com.apple.rtfd declares the same
+            # pair. Note the cost: on iPadOS 27 a package type never draws its
+            # UTTypeIconBackgroundName on a physical device, .rtfd included, so the
+            # iPad shows a plain page. The Finder and the Simulator both draw it.
             UTTypeConformsTo: [com.apple.package, public.composite-content]
             UTTypeTagSpecification:
               public.filename-extension: [swiftpost]
@@ -80,7 +94,16 @@ targets:
       Release: Local.xcconfig
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: photos.briansmith.SwiftWriter
+        # Lower case, so the bundle id is exactly the prefix of the exported UTIs
+        # above (photos.briansmith.swiftwriter.post). An app is authoritative for a
+        # type only inside its own bundle-identifier namespace, and "SwiftWriter"
+        # is not a prefix of "swiftwriter".
+        PRODUCT_BUNDLE_IDENTIFIER: photos.briansmith.swiftwriter
+        # iPad, not iPhone. A block editor with an inspector needs the width, and
+        # the plan never targeted the phone. Left unset the target builds universal,
+        # which puts UIDeviceFamily [1, 2] in the bundle and compiles every icon set
+        # for the phone idiom as well as the pad.
+        TARGETED_DEVICE_FAMILY: "2"
         MARKETING_VERSION: "0.1"
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete

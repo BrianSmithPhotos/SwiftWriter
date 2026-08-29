@@ -84,3 +84,9 @@ and MacPhotoMaster; only `Page.swift` belongs to this app.
 
 `sheet` lays the variants side by side with 64, 32 and 16 under each, which is
 where a design either survives or does not.
+
+The document fill draws in the Finder and in the iPadOS Simulator. It does not
+draw on a physical iPad: on iPadOS 27 a type conforming to `com.apple.package`
+never renders `UTTypeIconBackgroundName` on device. Apple's own `.rtfd` - the
+same conformance, the same key - fails identically, so this is an OS bug rather
+than anything to fix here. Re-test after an iPadOS update.
