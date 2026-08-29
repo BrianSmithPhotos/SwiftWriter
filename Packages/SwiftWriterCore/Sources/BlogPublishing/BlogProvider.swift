@@ -15,6 +15,11 @@ public protocol BlogProvider: Sendable {
 
     func authenticate() async throws
     func uploadMedia(_ upload: MediaUpload) async throws -> RemoteMedia
+    /// Revises the alt text and caption of media the provider already holds.
+    ///
+    /// Separate from `uploadMedia` because writing alt text for a post that is already
+    /// published must not send the photographs again.
+    func updateMediaDetails(remoteID: String, altText: String?, caption: String?) async throws
     func createPost(_ request: PublishRequest) async throws -> PublishResult
     /// `request.remotePostID` identifies the post to revise.
     func updatePost(_ request: PublishRequest) async throws -> PublishResult
@@ -22,6 +27,10 @@ public protocol BlogProvider: Sendable {
 
 public extension BlogProvider {
     var providerID: String { Self.providerID }
+
+    /// Nothing to do for a provider that keeps no metadata beside the image itself -
+    /// a static site, where the alt text lives only in the markup.
+    func updateMediaDetails(remoteID: String, altText: String?, caption: String?) async throws {}
 
     /// Validates the request against what this provider can do, then creates or revises.
     ///

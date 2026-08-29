@@ -4,7 +4,8 @@ import Foundation
 ///
 /// The raw value doubles as the base filename inside `Images/`, so it is restricted to
 /// characters that are safe in a filename on every platform the app runs on.
-public struct ImageID: Hashable, Codable, Sendable, RawRepresentable, CustomStringConvertible {
+public struct ImageID: Hashable, Codable, Sendable, RawRepresentable, CustomStringConvertible,
+                       CodingKeyRepresentable {
     public let rawValue: String
 
     public init?(rawValue: String) {
@@ -61,4 +62,22 @@ public struct BlockID: Hashable, Codable, Sendable, RawRepresentable, CustomStri
     }
 
     public var description: String { rawValue }
+}
+
+public extension ImageID {
+    /// Lets an `[ImageID: …]` dictionary encode as a JSON object keyed by the id, rather
+    /// than as the flat alternating array `JSONEncoder` falls back to. The publishing
+    /// record is meant to be read and diffed by hand, and an array of pairs is neither.
+    var codingKey: any CodingKey { Key(stringValue: rawValue)! }
+
+    init?<T: CodingKey>(codingKey: T) {
+        self.init(rawValue: codingKey.stringValue)
+    }
+
+    private struct Key: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
 }

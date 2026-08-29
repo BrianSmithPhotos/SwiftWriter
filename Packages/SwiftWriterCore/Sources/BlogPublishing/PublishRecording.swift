@@ -13,6 +13,7 @@ public extension PublishRecord {
         siteID: String,
         contentHash: String?,
         scheduledFor: Date? = nil,
+        media: [ImageID: UploadedMedia] = [:],
         at now: Date = .now
     ) -> PublishRecord {
         PublishRecord(
@@ -25,7 +26,8 @@ public extension PublishRecord {
             uploadedAt: now,
             publishedAt: result.publishedAt,
             lastSyncedAt: now,
-            contentHash: contentHash
+            contentHash: contentHash,
+            media: media
         )
     }
 }

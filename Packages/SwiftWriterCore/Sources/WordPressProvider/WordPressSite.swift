@@ -54,17 +54,38 @@ public struct WordPressSite: BlogProvider {
 
         // Alt text and caption go in a second call: wp/v2 takes the bytes and the metadata
         // separately, and the upload body is the file itself with nowhere to put them.
-        var fields: [String: Any] = [:]
-        if let altText = upload.altText, !altText.isEmpty { fields["alt_text"] = altText }
-        if let caption = upload.caption, !caption.isEmpty { fields["caption"] = caption }
-        let described: MediaResponse = fields.isEmpty
-            ? uploaded
-            : try await api.post("media/\(uploaded.id)", json: fields)
+        let described = try await describe(
+            remoteID: String(uploaded.id), altText: upload.altText, caption: upload.caption
+        )
 
-        guard let url = described.sourceUrl ?? uploaded.sourceUrl else {
+        guard let url = described?.sourceUrl ?? uploaded.sourceUrl else {
             throw PublishError.providerRefused("The upload came back without a URL")
         }
         return RemoteMedia(imageID: upload.imageID, remoteID: String(uploaded.id), url: url)
+    }
+
+    /// Revises an attachment's own alt text and caption, leaving the bytes alone.
+    ///
+    /// Writing alt text for a post that is already live means republishing it, and the
+    /// markup alone is not enough: WordPress keeps alt text on the attachment as well, and
+    /// the lightbox reads it from there. This is how that is corrected without uploading
+    /// the photograph a second time and leaving a duplicate in the media library.
+    public func updateMediaDetails(remoteID: String, altText: String?, caption: String?) async throws {
+        _ = try await describe(remoteID: remoteID, altText: altText, caption: caption)
+    }
+
+    /// Returns nil when there was nothing worth sending.
+    @discardableResult
+    private func describe(
+        remoteID: String, altText: String?, caption: String?
+    ) async throws -> MediaResponse? {
+        var fields: [String: Any] = [:]
+        // Sent even when empty, so clearing alt text in the editor clears it on the blog
+        // rather than leaving the old wording behind.
+        if let altText { fields["alt_text"] = altText }
+        if let caption { fields["caption"] = caption }
+        guard !fields.isEmpty else { return nil }
+        return try await api.post("media/\(remoteID)", json: fields)
     }
 
     // MARK: - Posts

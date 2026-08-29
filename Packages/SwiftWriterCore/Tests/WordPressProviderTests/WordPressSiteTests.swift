@@ -124,6 +124,34 @@ struct WordPressSiteTests {
         #expect(server.call("POST", "media/101") == nil)
     }
 
+    @Test("Alt text added later is sent on its own, with no second copy of the pixels")
+    func updatesMediaDetails() async throws {
+        let server = StubServer()
+        server.reply("POST media/101", body: #"{"id":101,"source_url":"https://briansmith.photos/one.jpg"}"#)
+
+        try await makeSite(server).updateMediaDetails(
+            remoteID: "101", altText: "A barn at dawn", caption: "The barn"
+        )
+
+        #expect(server.call("POST", "media") == nil)
+        let describe = try #require(server.call("POST", "media/101"))
+        #expect(describe.json?["alt_text"] as? String == "A barn at dawn")
+        #expect(describe.json?["caption"] as? String == "The barn")
+    }
+
+    @Test("Alt text cleared in the editor is sent as empty, so it clears on the blog too")
+    func clearsMediaDetails() async throws {
+        let server = StubServer()
+        server.reply("POST media/101", body: #"{"id":101,"source_url":"https://briansmith.photos/one.jpg"}"#)
+
+        try await makeSite(server).updateMediaDetails(remoteID: "101", altText: "", caption: "")
+
+        // Empty is a value, not a missing field: skipping it would leave the old wording live.
+        let describe = try #require(server.call("POST", "media/101"))
+        #expect(describe.json?["alt_text"] as? String == "")
+        #expect(describe.json?["caption"] as? String == "")
+    }
+
     @Test("A draft carries the rendered body, the excerpt, the slug and the hero image")
     func createsDraft() async throws {
         let server = StubServer()

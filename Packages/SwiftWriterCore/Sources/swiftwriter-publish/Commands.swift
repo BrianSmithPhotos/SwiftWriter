@@ -128,7 +128,7 @@ enum Commands {
         let loaded = try Package.read(package)
         let post = loaded.snapshot.post
         guard let record = loaded.snapshot.publishRecords.first(where: { $0.siteID == site.siteID }),
-              let remotePostID = record.remotePostID else {
+              record.remotePostID != nil else {
             throw CLIError.message("\"\(post.title)\" has not been published to site \(site.siteID).")
         }
         guard record.status == .published else {
@@ -168,6 +168,43 @@ enum Commands {
         let missing = post.imagesNeedingAltText.count
         if missing > 0 { print("  warning: \(missing) image(s) have no alt text") }
 
+        // Every image is decided before anything is sent, so a dry run reports exactly what
+        // a real one would do. Anything the blog already holds is reused: republishing is
+        // the normal way to add alt text to a live post, and uploading thirty-four
+        // photographs again each time would fill the media library with duplicates.
+        struct Planned {
+            let imageID: ImageID
+            let asset: ImageAsset
+            let hash: String
+            let altText: String?
+            let caption: String?
+            let action: MediaAction
+        }
+
+        var plan: [Planned] = []
+        var counts = (upload: 0, reuse: 0, describe: 0)
+        for imageID in post.referencedImageIDs {
+            guard let asset = post.assets[imageID] else {
+                throw CLIError.message("Image \(imageID.rawValue) has no sidecar.")
+            }
+            let hash = UploadedMedia.hash(of: try loaded.bytes(for: imageID))
+            let altText = asset.altText.isEmpty ? nil : asset.altText
+            let caption = asset.caption?.html
+            let action = MediaAction.decide(
+                held: existing?.media[imageID], contentHash: hash, altText: altText, caption: caption
+            )
+            switch action {
+            case .upload: counts.upload += 1
+            case .reuse: counts.reuse += 1
+            case .describe: counts.describe += 1
+            }
+            plan.append(Planned(
+                imageID: imageID, asset: asset, hash: hash,
+                altText: altText, caption: caption, action: action
+            ))
+        }
+        print("  images: \(counts.upload) to upload, \(counts.reuse) unchanged, \(counts.describe) to re-describe")
+
         if dryRun {
             print("  dry run - nothing sent")
             return
@@ -177,21 +214,46 @@ enum Commands {
 
         // Media first: the body cannot be rendered until every image has a remote URL.
         var media: [ImageID: RemoteMedia] = [:]
-        for imageID in post.referencedImageIDs {
-            guard let asset = post.assets[imageID] else {
-                throw CLIError.message("Image \(imageID.rawValue) has no sidecar.")
+        var uploads: [ImageID: UploadedMedia] = [:]
+
+        for planned in plan {
+            let held: UploadedMedia
+            switch planned.action {
+            case let .reuse(known):
+                held = known
+
+            case let .describe(known):
+                // Empty rather than nil, so clearing alt text in the editor clears it on the
+                // blog instead of leaving the old wording in place.
+                try await site.updateMediaDetails(
+                    remoteID: known.remoteID,
+                    altText: planned.altText ?? "", caption: planned.caption ?? ""
+                )
+                held = known
+                print("  described \(planned.asset.fileName) -> \(known.remoteID)")
+
+            case .upload:
+                let uploaded = try await site.uploadMedia(MediaUpload(
+                    imageID: planned.imageID,
+                    fileName: planned.asset.fileName,
+                    mimeType: Package.mimeType(for: planned.asset.fileName),
+                    data: try loaded.bytes(for: planned.imageID),
+                    altText: planned.altText,
+                    caption: planned.caption
+                ))
+                held = UploadedMedia(
+                    remoteID: uploaded.remoteID, url: uploaded.url, contentHash: planned.hash
+                )
+                print("  uploaded \(planned.asset.fileName) -> \(uploaded.remoteID)")
             }
-            let data = try loaded.bytes(for: imageID)
-            let uploaded = try await site.uploadMedia(MediaUpload(
-                imageID: imageID,
-                fileName: asset.fileName,
-                mimeType: Package.mimeType(for: asset.fileName),
-                data: data,
-                altText: asset.altText.isEmpty ? nil : asset.altText,
-                caption: asset.caption?.html
-            ))
-            media[imageID] = uploaded
-            print("  uploaded \(asset.fileName) -> \(uploaded.remoteID)")
+
+            media[planned.imageID] = RemoteMedia(
+                imageID: planned.imageID, remoteID: held.remoteID, url: held.url
+            )
+            uploads[planned.imageID] = UploadedMedia(
+                remoteID: held.remoteID, url: held.url, contentHash: planned.hash,
+                altText: planned.altText, caption: planned.caption
+            )
         }
 
         let result = try await site.publish(PublishRequest(
@@ -201,7 +263,7 @@ enum Commands {
 
         let record = PublishRecord.make(
             from: result, providerID: WordPressSite.providerID, siteID: site.siteID,
-            contentHash: try post.contentHash(), scheduledFor: scheduledFor
+            contentHash: try post.contentHash(), scheduledFor: scheduledFor, media: uploads
         )
         try Package.writeRecords(
             loaded.snapshot.publishRecords.updating(with: record), into: package

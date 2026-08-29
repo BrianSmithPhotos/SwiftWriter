@@ -111,6 +111,9 @@ for item in selected {
     }
 
     var sources: [ImageID: ImageSource] = [:]
+    // What the blog already holds for each image, so a republish updates the existing
+    // attachment instead of uploading a second copy of a photograph that is already live.
+    var uploaded: [ImageID: UploadedMedia] = [:]
     for image in imported.images {
         guard var asset = imported.post.assets[image.id] else { continue }
         guard let data = fetched[image.id] else {
@@ -137,6 +140,19 @@ for item in selected {
 
         imported.post.assets[image.id] = asset
         sources[image.id] = .data(derivative.data)
+
+        // The alt text and caption recorded are the blog's own, not the asset's: the asset
+        // may since have taken an IPTC caption the attachment has never been told about,
+        // and that difference is exactly what should be sent on the next publish.
+        if let remoteID = image.wordPressID, let sourceURL = image.sourceURL {
+            uploaded[image.id] = UploadedMedia(
+                remoteID: remoteID,
+                url: sourceURL,
+                contentHash: UploadedMedia.hash(of: derivative.data),
+                altText: image.altText.isEmpty ? nil : image.altText,
+                caption: image.caption?.html
+            )
+        }
     }
 
     // Anything that failed to download is pruned so the package never references an asset
@@ -152,6 +168,7 @@ for item in selected {
     // is inside the hash, so a hash taken before the fetch could never match the package
     // that ends up on disk, and every imported post would open looking edited.
     imported.publishRecord.contentHash = try? imported.post.contentHash()
+    imported.publishRecord.media = uploaded.filter { imported.post.assets[$0.key] != nil }
 
     let snapshot = PostSnapshot(
         post: imported.post,
