@@ -48,6 +48,43 @@ struct RemotePostFetcherTests {
         RemotePostFetcher(siteID: "174606693", transport: server.transport, token: { "test-token" })
     }
 
+    /// The site the corpus came from answers exactly like this: the post on the mapped
+    /// domain, every attachment on the wordpress.com host beneath it.
+    private func mappedDomainServer() -> StubServer {
+        let server = server()
+        server.reply("GET media", body: #"""
+        [
+          { "id": 101, "source_url": "https://briansmithphotos.wordpress.com/one.jpg",
+            "alt_text": "A barn at dawn", "caption": { "raw": "The barn" } },
+          { "id": 102, "source_url": "https://briansmithphotos.wordpress.com/hero.jpg",
+            "alt_text": "The ridge", "caption": { "raw": "" } }
+        ]
+        """#)
+        return server
+    }
+
+    @Test("An attachment is put on the same domain as the post that shows it")
+    func attachmentsFollowThePostDomain() async throws {
+        let pulled = try await fetcher(mappedDomainServer()).post(id: "55")
+
+        #expect(pulled.attachments["101"]?.attachmentURL == "https://briansmith.photos/one.jpg")
+        #expect(pulled.attachments["102"]?.attachmentURL == "https://briansmith.photos/hero.jpg")
+    }
+
+    /// The URL recorded against each photograph is what the next publish writes into the
+    /// body, so getting the host wrong here would move one post's images to another domain.
+    @Test("The recorded media urls are the ones the rest of the blog uses")
+    func recordedMediaStaysOnTheSiteDomain() async throws {
+        let pulled = try await fetcher(mappedDomainServer()).post(id: "55")
+        let imported = PostImporter.makePost(
+            from: pulled.item, attachments: pulled.attachments,
+            options: ImportOptions(siteID: "174606693")
+        )
+
+        let hosts = Set(imported.images.compactMap { $0.sourceURL?.host() })
+        #expect(hosts == ["briansmith.photos"])
+    }
+
     @Test("The post arrives in the shape an export file would have had")
     func buildsAnItem() async throws {
         let pulled = try await fetcher(server()).post(id: "55")

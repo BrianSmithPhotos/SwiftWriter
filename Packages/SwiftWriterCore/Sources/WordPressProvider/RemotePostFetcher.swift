@@ -60,11 +60,16 @@ public struct RemotePostFetcher: Sendable {
         var wanted = GutenbergParser.parse(content).images.compactMap(\.wordPressID)
         if let thumbnail = item.meta["_thumbnail_id"] { wanted.append(thumbnail) }
 
-        return RemotePost(item: item, attachments: try await attachments(ids: wanted))
+        return RemotePost(
+            item: item,
+            attachments: try await attachments(ids: wanted, on: response.link)
+        )
     }
 
     /// Attachment records for `ids`, in one request.
-    private func attachments(ids: [String]) async throws -> [String: WXRItem] {
+    ///
+    /// - Parameter link: the post's own address, which says what the blog calls itself.
+    private func attachments(ids: [String], on link: String?) async throws -> [String: WXRItem] {
         let unique = Array(Set(ids)).sorted()
         guard !unique.isEmpty else { return [:] }
         let media: [MediaItem] = try await api.get("media", query: [
@@ -80,7 +85,7 @@ public struct RemotePostFetcher: Sendable {
             var attachment = WXRItem()
             attachment.postID = String(entry.id)
             attachment.postType = "attachment"
-            attachment.attachmentURL = entry.sourceUrl
+            attachment.attachmentURL = onSiteDomain(entry.sourceUrl, matching: link)
             // WXR puts an attachment's caption in its excerpt, which is where the importer
             // looks for it.
             attachment.excerpt = entry.caption?.raw ?? ""
@@ -88,6 +93,28 @@ public struct RemotePostFetcher: Sendable {
             attachments[attachment.postID] = attachment
         }
         return attachments
+    }
+
+    /// Puts an attachment on the same domain as the post that shows it.
+    ///
+    /// `wp/v2` contradicts itself on a site with a mapped domain: it gives the post's `link`
+    /// as briansmith.photos but every attachment's `source_url` as the wordpress.com host
+    /// underneath. Both serve the same file, so nothing looks wrong until the pulled post is
+    /// published again - the recorded URL is what gets written into the body markup, and that
+    /// post alone would start serving its photographs from a domain no other post uses.
+    ///
+    /// The host the API gives for the post is the one the blog calls itself, so that is the
+    /// one kept. This assumes an attachment of a post lives on that post's own site, which is
+    /// true of anything in the media library and untrue only of a photograph hotlinked from
+    /// somewhere else.
+    private func onSiteDomain(_ url: String?, matching link: String?) -> String? {
+        guard let url,
+              let host = link.flatMap({ URLComponents(string: $0)?.host }),
+              var components = URLComponents(string: url),
+              components.host != host
+        else { return url }
+        components.host = host
+        return components.string ?? url
     }
 
     /// Term names for term ids, in the order the post listed them.
