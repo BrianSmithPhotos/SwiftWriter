@@ -1,16 +1,85 @@
+import PostKit
 import SwiftUI
 
-/// The thin gap between two blocks, which adds an empty paragraph when clicked.
+/// What the insert bar can add to a post.
+///
+/// A gallery is deliberately absent. Every other kind here is empty when it arrives and is
+/// filled in by typing, but a gallery means nothing until photographs are chosen for it, so
+/// it needs a picker rather than a menu item.
+enum BlockInsertion: String, CaseIterable, Identifiable {
+    case paragraph
+    case heading
+    case quote
+    case separator
+    case embed
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .paragraph: "Paragraph"
+        case .heading: "Heading"
+        case .quote: "Quote"
+        case .separator: "Separator"
+        case .embed: "Embed"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .paragraph: "text.alignleft"
+        case .heading: "textformat.size.larger"
+        case .quote: "text.quote"
+        case .separator: "minus"
+        case .embed: "link"
+        }
+    }
+
+    /// A new block of this kind, empty and ready to be typed into.
+    var kind: Block.Kind {
+        switch self {
+        case .paragraph: .paragraph(InlineText(html: ""))
+        // H2 rather than H1: the post's title is the H1, so a heading inside the body starts
+        // one level down, which is what the imported corpus does too.
+        case .heading: .heading(level: 2, text: InlineText(html: ""))
+        case .quote: .quote(InlineText(html: ""), attribution: nil)
+        case .separator: .separator
+        case .embed: .embed(url: Self.blankEmbed)
+        }
+    }
+
+    /// Whether adding this should move the caret into it. A separator has nothing to type.
+    var takesFocus: Bool { self != .separator }
+
+    /// A scheme and no address. `Block.Kind.embed` has to hold a `URL`, and there is no such
+    /// thing as an empty one, so this stands in until an address is typed - it is what the
+    /// editor treats as "still blank".
+    static let blankEmbed = URL(string: "https://")!
+}
+
+/// The thin gap between two blocks. A click adds an empty paragraph; the menu adds the rest.
 ///
 /// It is always drawn, faintly, rather than appearing on hover: the iPad has no pointer, so
 /// a hover-only control would not exist there at all. The pointer only brightens it.
+///
+/// A `Menu` with a `primaryAction` rather than a menu of five items, because a paragraph is
+/// what nearly every gap becomes and it should stay one click. The others are behind a press
+/// and hold, or the pointer's second click.
 struct BlockInsertBar: View {
-    var add: () -> Void
+    var add: (BlockInsertion) -> Void
 
     @State private var pointerIsOver = false
 
     var body: some View {
-        Button(action: add) {
+        Menu {
+            ForEach(BlockInsertion.allCases) { insertion in
+                Button {
+                    add(insertion)
+                } label: {
+                    Label(insertion.title, systemImage: insertion.symbol)
+                }
+            }
+        } label: {
             HStack(spacing: 6) {
                 rule
                 Image(systemName: "plus.circle.fill")
@@ -24,10 +93,14 @@ struct BlockInsertBar: View {
             .frame(height: 14)
             // The whole strip is the target, not just the small symbol in the middle.
             .contentShape(.rect)
+        } primaryAction: {
+            add(.paragraph)
         }
         .buttonStyle(.plain)
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
         .onHover { pointerIsOver = $0 }
-        .help("Add a paragraph here")
+        .help("Add a paragraph here, or hold for headings, quotes, separators and embeds")
     }
 
     private var rule: some View {

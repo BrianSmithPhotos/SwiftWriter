@@ -22,6 +22,7 @@ struct BlockView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 InlineTextEditor(text: binding(to: text) { .heading(level: level, text: $0) }, prompt: "Heading")
                     .font(.system(size: headingSize(level), weight: .semibold))
+                    .focused(focus, equals: block.id)
                 Picker("Level", selection: levelBinding(text: text, level: level)) {
                     ForEach(2...4, id: \.self) { Text("H\($0)").tag($0) }
                 }
@@ -44,9 +45,21 @@ struct BlockView: View {
                         prompt: "Quote"
                     )
                     .font(.body.italic())
-                    if let attribution {
-                        Text(attribution).font(.caption).foregroundStyle(.secondary)
-                    }
+                    .focused(focus, equals: block.id)
+                    // Always a field, never a label: a quote added here starts with no
+                    // attribution, and a view that only appears once there is one could
+                    // never be the thing that puts it there.
+                    TextField(
+                        "Attribution, if there is one",
+                        text: Binding(
+                            get: { attribution ?? "" },
+                            set: { block.kind = .quote(text, attribution: $0.isEmpty ? nil : $0) }
+                        ),
+                        axis: .vertical
+                    )
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
             }
 
@@ -54,10 +67,27 @@ struct BlockView: View {
             Divider().padding(.vertical, 8)
 
         case .embed(let url):
-            Link(destination: url) {
-                Label(url.absoluteString, systemImage: "link")
+            HStack(spacing: 8) {
+                Image(systemName: "link")
                     .font(.callout)
-                    .lineLimit(1)
+                    .foregroundStyle(.secondary)
+                // The address is edited in place rather than shown as a link. An embed added
+                // from the menu arrives blank, so the block has to be able to become one.
+                TextField(
+                    "Address to embed",
+                    text: Binding(
+                        get: { url == BlockInsertion.blankEmbed ? "" : url.absoluteString },
+                        set: {
+                            block.kind = .embed(
+                                url: URL(string: $0) ?? BlockInsertion.blankEmbed
+                            )
+                        }
+                    )
+                )
+                .textFieldStyle(.plain)
+                .font(.callout)
+                .lineLimit(1)
+                .focused(focus, equals: block.id)
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)

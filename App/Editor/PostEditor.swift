@@ -58,10 +58,14 @@ struct PostEditor: View {
         #endif
     }
 
-    /// Adds an empty paragraph and puts the caret in it. One mutation of `post`, so it is
-    /// one undo step rather than two.
-    private func addParagraph(before id: BlockID? = nil) {
-        focusedBlock = document.post.insertParagraph(before: id)
+    /// Adds an empty block and puts the caret in it. One mutation of `post`, so it is one
+    /// undo step rather than two.
+    ///
+    /// A separator is the exception: there is nothing to type into it, so taking focus would
+    /// only pull the caret out of whatever paragraph the writer was in.
+    private func add(_ insertion: BlockInsertion, before id: BlockID? = nil) {
+        let added = document.post.insert(insertion.kind, before: id)
+        if insertion.takesFocus { focusedBlock = added }
     }
 
     /// The post itself. Split out so the strip and the editor are laid out side by side
@@ -94,7 +98,7 @@ struct PostEditor: View {
 
                     ForEach($document.post.blocks) { $block in
                         VStack(alignment: .leading, spacing: 8) {
-                            BlockInsertBar { addParagraph(before: block.id) }
+                            BlockInsertBar { add($0, before: block.id) }
                             BlockView(block: $block, post: $document.post, focus: $focusedBlock)
                                 .id(block.id)
                                 // In the margin as an overlay, so adding it moves no text.
@@ -116,7 +120,7 @@ struct PostEditor: View {
                     }
 
                     // The last gap, so a post can be finished with prose rather than a picture.
-                    BlockInsertBar { addParagraph() }
+                    BlockInsertBar { add($0) }
 
                     if dropper.reading > 0 {
                         Label(

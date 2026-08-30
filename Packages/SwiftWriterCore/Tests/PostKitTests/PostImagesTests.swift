@@ -126,4 +126,47 @@ struct PostEditingTests {
         subject.removeBlock(id: subject.blocks[1].id)
         #expect(texts(subject) == ["p0", "p2"])
     }
+
+    /// The insert bar offers more than paragraphs now, so the generic insert has to put any
+    /// kind in the right place - not just the one it was written for.
+    @Test("Any kind of block goes in ahead of the block named")
+    func insertsAnyKindBefore() {
+        var subject = post(3)
+        let second = subject.blocks[1].id
+        subject.insert(.heading(level: 2, text: .plain("Morning")), before: second)
+
+        #expect(subject.blocks.count == 4)
+        guard case let .heading(level, text) = subject.blocks[1].kind else {
+            Issue.record("expected a heading at index 1")
+            return
+        }
+        #expect(level == 2)
+        #expect(text.html == "Morning")
+    }
+
+    @Test("A block with no text still inserts, at the end")
+    func insertsSeparatorAtEnd() {
+        var subject = post(2)
+        subject.insert(.separator)
+
+        #expect(subject.blocks.count == 3)
+        #expect(subject.blocks[2].kind == .separator)
+    }
+
+    @Test("Every kind the insert bar offers can be added, and each gets its own id")
+    func insertsEveryKind() {
+        var subject = post(0)
+        let kinds: [Block.Kind] = [
+            .paragraph(.plain("")),
+            .heading(level: 2, text: .plain("")),
+            .quote(.plain(""), attribution: nil),
+            .separator,
+            .embed(url: URL(string: "https://")!),
+        ]
+        let ids = kinds.map { subject.insert($0) }
+
+        #expect(subject.blocks.count == kinds.count)
+        #expect(Set(ids).count == kinds.count)
+        #expect(subject.blocks.map(\.kind) == kinds)
+    }
 }
