@@ -14,7 +14,10 @@ swiftwriter-publish - publish a .swiftpost to WordPress
 
   auth                          authorise this machine and store a token in the Keychain
   status <package>              show what is stored for a package, and the next free slot
-  draft <package>               upload the images and create or update a draft
+  draft <package>               upload the images and create or update a draft.
+                                Needs --yes if the post is already live
+  update <package>              revise a published or scheduled post in place, which is
+                                how alt text written afterwards reaches the blog
   schedule <package> [--at <ISO8601>]
                                 set the post to go live, by default at the next free
                                 Tuesday or Thursday 08:00. Needs --yes
@@ -109,6 +112,11 @@ do {
 
     case "draft":
         try await Commands.draft(
+            package: try package(), site: try site(), confirmed: confirmed, dryRun: dryRun
+        )
+
+    case "update":
+        try await Commands.update(
             package: try package(), site: try site(), dryRun: dryRun
         )
 

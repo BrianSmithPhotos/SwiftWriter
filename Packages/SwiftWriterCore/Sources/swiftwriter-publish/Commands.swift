@@ -114,10 +114,45 @@ enum Commands {
 
     // MARK: - draft
 
-    static func draft(package: URL, site: WordPressSite, dryRun: Bool) async throws {
+    /// Saves the post as a draft on the blog.
+    ///
+    /// Refuses on a post that is already live unless it is asked for twice. An update always
+    /// carries a status, so this would not merely record a draft - it would take a published
+    /// post off the blog. `update` is the command for revising something live.
+    static func draft(package: URL, site: WordPressSite, confirmed: Bool, dryRun: Bool) async throws {
+        let loaded = try Package.read(package)
+        let held = loaded.snapshot.publishRecords.first { $0.siteID == site.siteID }
+        if held?.status == .published {
+            try confirm(confirmed, """
+                "\(loaded.snapshot.post.title)" is live. Saving it as a draft would take it \
+                off the blog. To revise it in place, use: swiftwriter-publish update
+                """)
+        }
         try await send(
             package: package, site: site, status: .draft,
             scheduledFor: nil, displayDate: nil, dryRun: dryRun
+        )
+    }
+
+    // MARK: - update
+
+    /// Revises a post in the state it is already in.
+    ///
+    /// This is how alt text written after publishing reaches the blog: the photographs are
+    /// unchanged, so only their descriptions are sent.
+    static func update(package: URL, site: WordPressSite, dryRun: Bool) async throws {
+        let loaded = try Package.read(package)
+        guard let held = loaded.snapshot.publishRecords.first(where: { $0.siteID == site.siteID }),
+              held.remotePostID != nil else {
+            throw CLIError.message(
+                "\"\(loaded.snapshot.post.title)\" has not been published to site \(site.siteID)."
+            )
+        }
+        try await send(
+            package: package, site: site, status: held.status,
+            // Carried through, or updating a scheduled post would unschedule it.
+            scheduledFor: held.status == .scheduled ? held.scheduledFor : nil,
+            displayDate: nil, dryRun: dryRun
         )
     }
 

@@ -5,8 +5,9 @@ import WordPressProvider
 
 /// The publishing controls in the inspector.
 ///
-/// Draft and live are separate buttons rather than a status picker, because the difference
-/// between them is the whole point: one is private, the other is on the internet.
+/// What the buttons offer follows what the blog already holds. That is not politeness: an
+/// update always sends a status, so a "Save Draft" pressed on a live post would take it off
+/// the blog. A post that is live can only be updated as live.
 struct PublishSection: View {
     @Bindable var document: PostDocument
 
@@ -21,10 +22,11 @@ struct PublishSection: View {
         PostPublisher.siteID(for: document, default: defaultSiteID)
     }
 
-    /// True once the post has been sent somewhere, which is when the site is settled and
-    /// asking for it again would only be a way to get it wrong.
-    private var siteIsKnown: Bool {
-        document.publishRecords.contains { $0.providerID == WordPressSite.providerID }
+    /// What this site is known to hold for this post.
+    private var record: PublishRecord? {
+        document.publishRecords.first {
+            $0.providerID == WordPressSite.providerID && $0.siteID == siteID
+        }
     }
 
     var body: some View {
@@ -36,17 +38,15 @@ struct PublishSection: View {
                 PublishRecordRow(record: record, post: document.post)
             }
 
-            if !siteIsKnown {
+            // Asked for only until the post has been somewhere. After that the record
+            // answers, and asking again would only be a way to get it wrong.
+            if record == nil {
                 TextField("WordPress site id", text: $defaultSiteID)
                     .font(.callout)
             }
 
             HStack {
-                Button("Save Draft") {
-                    Task { await publisher.publish(document, siteID: siteID, status: .draft) }
-                }
-                Button("Publish") { confirmingLive = true }
-                    .buttonStyle(.borderedProminent)
+                buttons
             }
             .disabled(publisher.isWorking || siteID.isEmpty)
 
@@ -55,12 +55,40 @@ struct PublishSection: View {
         .confirmationDialog(
             "Publish this post to \(siteID)?", isPresented: $confirmingLive, titleVisibility: .visible
         ) {
-            Button("Publish Now") {
-                Task { await publisher.publish(document, siteID: siteID, status: .published) }
-            }
+            Button("Publish Now") { send(.published) }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("It goes live on the blog immediately.")
+        }
+    }
+
+    @ViewBuilder
+    private var buttons: some View {
+        switch record?.status {
+        case .published:
+            // No going live to confirm: it is already live. Updating is how alt text
+            // written after the fact reaches the blog.
+            Button("Update Post") { send(.published) }
+                .buttonStyle(.borderedProminent)
+
+        case .scheduled:
+            // The release date is carried through, or updating would unschedule it.
+            Button("Update Post") { send(.scheduled, at: record?.scheduledFor) }
+            Button("Publish Now") { confirmingLive = true }
+                .buttonStyle(.borderedProminent)
+
+        case .draft, nil:
+            Button("Save Draft") { send(.draft) }
+            Button("Publish") { confirmingLive = true }
+                .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private func send(_ status: PublishStatus, at scheduledFor: Date? = nil) {
+        Task {
+            await publisher.publish(
+                document, siteID: siteID, status: status, scheduledFor: scheduledFor
+            )
         }
     }
 
