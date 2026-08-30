@@ -106,7 +106,14 @@ public struct WordPressSite: BlogProvider {
         guard let remoteID = request.remotePostID else {
             throw PublishError.providerRefused("Updating a post needs the id it was given")
         }
-        return try await send(request, to: "posts/\(remoteID)")
+        do {
+            return try await send(request, to: "posts/\(remoteID)")
+        } catch PublishError.notFound {
+            // Only this request is watched for a 404. The categories and tags resolved on the
+            // way here are looked up by name and created when missing, so a 404 at this point
+            // can only mean the post itself has gone.
+            throw PublishError.remotePostMissing(remoteID)
+        }
     }
 
     private func send(_ request: PublishRequest, to path: String) async throws -> PublishResult {

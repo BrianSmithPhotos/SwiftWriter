@@ -258,6 +258,8 @@ enum Commands {
             switch step {
             case let .uploaded(fileName, remoteID): print("  uploaded \(fileName) -> \(remoteID)")
             case let .described(fileName, remoteID): print("  described \(fileName) -> \(remoteID)")
+            case let .postMissing(remotePostID):
+                print("  post \(remotePostID) is no longer on the blog - sending it again as a new post")
             case let .finished(result):
                 print("  \(result.status.rawValue) as post \(result.remotePostID)")
                 if let url = result.remoteURL { print("  \(url.absoluteString)") }

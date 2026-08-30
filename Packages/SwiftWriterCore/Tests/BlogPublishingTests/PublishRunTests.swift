@@ -9,6 +9,7 @@ private final class Log: @unchecked Sendable {
     var uploaded: [String] = []
     var described: [String] = []
     var published: [PublishRequest] = []
+    var postMissingSteps = 0
 }
 
 private struct RecordingProvider: BlogProvider {
@@ -18,6 +19,8 @@ private struct RecordingProvider: BlogProvider {
         .uploadMedia, .updateExisting, .schedule, .heroImage, .backdate,
     ]
     let log: Log
+    /// Stands in for a post that was deleted on the blog after it was recorded here.
+    var postIsMissing = false
 
     func authenticate() async throws {}
 
@@ -41,7 +44,31 @@ private struct RecordingProvider: BlogProvider {
 
     func updatePost(_ request: PublishRequest) async throws -> PublishResult {
         log.published.append(request)
+        if postIsMissing {
+            throw PublishError.remotePostMissing(request.remotePostID ?? "?")
+        }
         return PublishResult(remotePostID: request.remotePostID ?? "post-1", status: request.status)
+    }
+}
+
+/// Refuses the update for a reason nothing can recover from, to prove the retry is reserved
+/// for the one failure it was written for.
+private struct RefusingProvider: BlogProvider {
+    static let providerID = "stub"
+    let siteID = "site-1"
+    let capabilities: ProviderCapabilities = [.uploadMedia, .updateExisting]
+    let log: Log
+
+    func authenticate() async throws {}
+    func uploadMedia(_ upload: MediaUpload) async throws -> RemoteMedia {
+        log.uploaded.append(upload.fileName)
+        return RemoteMedia(imageID: upload.imageID, remoteID: "x", url: URL(string: "https://example.test/x")!)
+    }
+    func createPost(_ request: PublishRequest) async throws -> PublishResult {
+        throw PublishError.notAuthenticated
+    }
+    func updatePost(_ request: PublishRequest) async throws -> PublishResult {
+        throw PublishError.notAuthenticated
     }
 }
 
@@ -137,6 +164,48 @@ struct PublishRunTests {
         _ = try await run(revised, held: held, log: log)
         #expect(log.uploaded.isEmpty)
         #expect(log.described == ["remote-one.jpg"])
+    }
+
+    /// The case behind this: a post uploaded as a draft, then trashed in wp-admin along with
+    /// every photograph it used. The record on disk still names all of it.
+    @Test("A post deleted on the blog is sent again from nothing, photographs and all")
+    func missingPostStartsOver() async throws {
+        let subject = post(altText: "A hedge.")
+        let held = try await run(subject, log: Log())
+
+        let log = Log()
+        let plan = try PublishRun.plan(post: subject, held: held) { _ in bytes }
+        // The plan is built from the record, which still believes the blog holds the picture.
+        #expect(plan.unchanged == 1)
+
+        let record = try await PublishRun.send(
+            plan, post: subject, to: RecordingProvider(log: log, postIsMissing: true),
+            status: .draft, remotePostID: held.remotePostID, bytes: { _ in bytes }
+        ) { step in
+            if case .postMissing = step { log.postMissingSteps += 1 }
+        }
+
+        // An update naming the old post, then a create naming nothing.
+        #expect(log.published.map(\.remotePostID) == ["post-1", nil])
+        // And the photograph the record claimed was already up went up again.
+        #expect(log.uploaded == ["one.jpg"])
+        #expect(log.postMissingSteps == 1)
+        #expect(record.media[imageID(of: subject)]?.remoteID == "remote-one.jpg")
+    }
+
+    @Test("A failure that is not a missing post is not retried")
+    func otherFailuresStand() async throws {
+        let subject = post()
+        let held = try await run(subject, log: Log())
+        let log = Log()
+        let plan = try PublishRun.plan(post: subject, held: held) { _ in bytes }
+        await #expect(throws: PublishError.notAuthenticated) {
+            try await PublishRun.send(
+                plan, post: subject, to: RefusingProvider(log: log), status: .draft,
+                remotePostID: held.remotePostID, bytes: { _ in bytes }
+            )
+        }
+        #expect(log.uploaded.isEmpty)
     }
 
     @Test("The mime type comes from the name the package stored")

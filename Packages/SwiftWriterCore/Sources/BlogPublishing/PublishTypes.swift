@@ -107,6 +107,12 @@ public enum PublishError: Error, Equatable {
     /// become the release date instead.
     case backdateNeedsPublished
     case notAuthenticated
+    /// The provider says the thing being asked for is not there. Kept apart from
+    /// `providerRefused` only so a caller can recognise it without reading the message.
+    case notFound(String)
+    /// The post an update names is no longer on the blog - trashed and emptied, or deleted.
+    /// The record that named it is therefore stale in every part, media included.
+    case remotePostMissing(String)
     /// The provider answered, but not with something we can use.
     case providerRefused(String)
 }
@@ -127,6 +133,10 @@ extension PublishError: LocalizedError, CustomStringConvertible {
             "Only a post that is already live can be given an earlier date."
         case .notAuthenticated:
             "Not signed in to this blog."
+        case let .notFound(reason):
+            reason
+        case let .remotePostMissing(remoteID):
+            "Post \(remoteID) is no longer on the blog."
         case let .providerRefused(reason):
             reason
         }

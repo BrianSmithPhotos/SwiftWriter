@@ -85,7 +85,14 @@ final class PostPublisher {
             plan, post: document.post, to: site, status: status,
             scheduledFor: scheduledFor, remotePostID: held?.remotePostID,
             bytes: { bytes[$0] ?? Data() }
-        )
+        ) { step in
+            // The one step that changes what is happening rather than reporting progress: the
+            // post was gone, so a publish that promised to send nothing now sends everything.
+            guard case .postMissing = step else { return }
+            Task { @MainActor [weak self] in
+                self?.state = .working("The post was gone from the blog - uploading it again")
+            }
+        }
     }
 
     /// Every referenced photograph, read once up front.

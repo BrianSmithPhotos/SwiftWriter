@@ -104,6 +104,9 @@ struct WordPressAPI: Sendable {
            let json = String(data: encoded, encoding: .utf8) {
             text += " \(json)"
         }
+        // 404 keeps its message but gets its own case, because "this is not there" is the one
+        // failure a caller can act on rather than only report.
+        if statusCode == 404 { return .notFound(text) }
         return .providerRefused(text)
     }
 

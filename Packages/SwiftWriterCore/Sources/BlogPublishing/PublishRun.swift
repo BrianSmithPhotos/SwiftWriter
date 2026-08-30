@@ -41,6 +41,9 @@ public enum PublishRun {
     public enum Step: Sendable {
         case uploaded(fileName: String, remoteID: String)
         case described(fileName: String, remoteID: String)
+        /// The post the record named has gone from the blog, so it is being sent again from
+        /// nothing. Worth showing: the upload that follows is much longer than expected.
+        case postMissing(remotePostID: String)
         case finished(PublishResult)
     }
 
@@ -75,6 +78,11 @@ public enum PublishRun {
     ///
     /// Media goes first because the body cannot be rendered until every image has a remote
     /// URL. Nothing is written to disk here: the caller decides where the record belongs.
+    ///
+    /// If the blog no longer has the post the record names, the whole record is treated as
+    /// stale and everything is sent again as a new post. A record cannot be checked any other
+    /// way without asking the blog about every attachment on every publish, and deleting a
+    /// post is what people actually do - usually taking its pictures with it.
     public static func send(
         _ plan: Plan,
         post: Post,
@@ -88,6 +96,35 @@ public enum PublishRun {
     ) async throws -> PublishRecord {
         try await provider.authenticate()
 
+        do {
+            return try await attempt(
+                plan, post: post, to: provider, status: status, scheduledFor: scheduledFor,
+                displayDate: displayDate, remotePostID: remotePostID, bytes: bytes, step: step
+            )
+        } catch PublishError.remotePostMissing(let missingID) {
+            step(.postMissing(remotePostID: missingID))
+            // Planned again with no held record, which marks every photograph for upload, and
+            // sent with no id, which creates a post rather than updating one.
+            let fresh = try Self.plan(post: post, held: nil, bytes: bytes)
+            return try await attempt(
+                fresh, post: post, to: provider, status: status, scheduledFor: scheduledFor,
+                displayDate: displayDate, remotePostID: nil, bytes: bytes, step: step
+            )
+        }
+    }
+
+    /// One pass at sending. Separate from `send` so the retry runs exactly the same code.
+    private static func attempt(
+        _ plan: Plan,
+        post: Post,
+        to provider: some BlogProvider,
+        status: PublishStatus,
+        scheduledFor: Date?,
+        displayDate: Date?,
+        remotePostID: String?,
+        bytes: Bytes,
+        step: @Sendable (Step) -> Void
+    ) async throws -> PublishRecord {
         var media: [ImageID: RemoteMedia] = [:]
         var uploads: [ImageID: UploadedMedia] = [:]
 

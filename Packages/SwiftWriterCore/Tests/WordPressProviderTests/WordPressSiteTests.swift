@@ -90,6 +90,21 @@ struct WordPressSiteTests {
         }
     }
 
+    @Test("An update to a post the blog no longer has is named as that, not as a refusal")
+    func missingPostIsNamed() async throws {
+        let server = StubServer()
+        server.reply(
+            "POST posts/999", status: 404,
+            body: #"{"code":"rest_post_invalid_id","message":"Invalid post ID."}"#
+        )
+        // The caller can act on this one: it means the record on disk is stale.
+        await #expect(throws: PublishError.remotePostMissing("999")) {
+            try await makeSite(server).publish(
+                PublishRequest(post: Post(title: "A walk"), status: .draft, remotePostID: "999")
+            )
+        }
+    }
+
     @Test("An upload sends the bytes, then describes them in a second call")
     func uploadsMedia() async throws {
         let server = StubServer()
