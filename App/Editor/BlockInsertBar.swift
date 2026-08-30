@@ -17,8 +17,10 @@ struct BlockInsertBar: View {
                     .font(.caption)
                 rule
             }
-            .foregroundStyle(.tertiary)
-            .opacity(pointerIsOver ? 1 : 0.3)
+            // Dimmed once, not twice: .tertiary is already faint, and multiplying it by a
+            // low opacity left nothing to see in dark mode on the iPad.
+            .foregroundStyle(.secondary)
+            .opacity(pointerIsOver ? 1 : 0.4)
             .frame(height: 14)
             // The whole strip is the target, not just the small symbol in the middle.
             .contentShape(.rect)
@@ -77,5 +79,30 @@ struct BlockRemoveButton: View {
         } message: {
             Text("The photograph leaves the package the next time the post is saved.")
         }
+    }
+}
+
+/// Marks a photograph as the post's hero, or unmarks it.
+///
+/// Nothing in the app set `heroImageID` before this: it arrived only on imported posts, from
+/// WordPress's featured image. A post composed by dropping photographs had no way to name one.
+struct BlockHeroButton: View {
+    var isHero: Bool
+    var toggle: () -> Void
+
+    @State private var pointerIsOver = false
+
+    var body: some View {
+        Button(action: toggle) {
+            Image(systemName: isHero ? "star.fill" : "star")
+                .font(.callout)
+                .foregroundStyle(isHero ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                .opacity(isHero || pointerIsOver ? 1 : 0.4)
+                .frame(width: 24, height: 24)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .onHover { pointerIsOver = $0 }
+        .help(isHero ? "The hero image of this post" : "Make this the hero image")
     }
 }

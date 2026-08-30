@@ -70,7 +70,10 @@ struct PostEditor: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    if let hero = document.post.heroImageID {
+                    // Only shown here when the hero is not already in the body. When it is,
+                    // the filled star in its margin says so instead - drawing the same
+                    // photograph twice in one editor reads like a mistake.
+                    if let hero = document.post.heroImageID, !document.post.bodyShows(hero) {
                         VStack(alignment: .leading, spacing: 6) {
                             PackageImage(imageID: hero)
                                 .clipShape(.rect(cornerRadius: 6))
@@ -99,8 +102,16 @@ struct PostEditor: View {
                                 .id(block.id)
                                 // In the margin as an overlay, so adding it moves no text.
                                 .overlay(alignment: .topLeading) {
-                                    BlockRemoveButton(holdsImages: !block.imageIDs.isEmpty) {
-                                        document.post.removeBlock(id: block.id)
+                                    VStack(spacing: 0) {
+                                        BlockRemoveButton(holdsImages: !block.imageIDs.isEmpty) {
+                                            document.post.removeBlock(id: block.id)
+                                        }
+                                        if case let .image(imageID, _) = block.kind {
+                                            BlockHeroButton(isHero: document.post.heroImageID == imageID) {
+                                                document.post.heroImageID =
+                                                    document.post.heroImageID == imageID ? nil : imageID
+                                            }
+                                        }
                                     }
                                     .offset(x: -28)
                                 }
