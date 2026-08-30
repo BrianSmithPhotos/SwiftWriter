@@ -99,8 +99,10 @@ struct PostEditor: View {
                                 .id(block.id)
                                 // In the margin as an overlay, so adding it moves no text.
                                 .overlay(alignment: .topLeading) {
-                                    BlockRemoveButton { document.post.removeBlock(id: block.id) }
-                                        .offset(x: -26)
+                                    BlockRemoveButton(holdsImages: !block.imageIDs.isEmpty) {
+                                        document.post.removeBlock(id: block.id)
+                                    }
+                                    .offset(x: -28)
                                 }
                         }
                     }
