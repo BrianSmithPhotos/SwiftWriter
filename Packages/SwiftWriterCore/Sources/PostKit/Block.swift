@@ -41,6 +41,33 @@ public struct Block: Identifiable, Codable, Sendable, Equatable {
         }
     }
 
+    /// The photographs of a gallery, in order.
+    ///
+    /// Reading gives an empty array for any other kind of block, and writing does nothing
+    /// unless this really is a gallery. Settable on purpose: it lets the editor reorder and
+    /// remove with the ordinary array methods instead of rebuilding the enum case by hand at
+    /// every call site, which is where an off-by-one in the column count would hide.
+    public var galleryImageIDs: [ImageID] {
+        get {
+            if case let .gallery(imageIDs, _) = kind { imageIDs } else { [] }
+        }
+        set {
+            guard case let .gallery(_, columns) = kind else { return }
+            kind = .gallery(imageIDs: newValue, columns: columns)
+        }
+    }
+
+    /// How many photographs a gallery is drawn across. Zero for any other kind.
+    public var galleryColumns: Int {
+        get {
+            if case let .gallery(_, columns) = kind { columns } else { 0 }
+        }
+        set {
+            guard case let .gallery(imageIDs, _) = kind else { return }
+            kind = .gallery(imageIDs: imageIDs, columns: max(1, newValue))
+        }
+    }
+
     // MARK: - Codable
 
     // Written by hand rather than synthesised. The compiler would emit `{"paragraph":{"_0":…}}`

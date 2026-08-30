@@ -3,13 +3,15 @@ import SwiftUI
 
 /// What the insert bar can add to a post.
 ///
-/// A gallery is deliberately absent. Every other kind here is empty when it arrives and is
-/// filled in by typing, but a gallery means nothing until photographs are chosen for it, so
-/// it needs a picker rather than a menu item.
+/// Every kind but one arrives empty and is filled in by typing. A gallery cannot: an empty
+/// grid is not a thing anyone wants on screen, so choosing it opens a picker first and the
+/// block is only made once there are photographs to put in it. That is why `kind` is
+/// optional rather than every case answering with a block.
 enum BlockInsertion: String, CaseIterable, Identifiable {
     case paragraph
     case heading
     case quote
+    case gallery
     case separator
     case embed
 
@@ -20,6 +22,7 @@ enum BlockInsertion: String, CaseIterable, Identifiable {
         case .paragraph: "Paragraph"
         case .heading: "Heading"
         case .quote: "Quote"
+        case .gallery: "Gallery..."
         case .separator: "Separator"
         case .embed: "Embed"
         }
@@ -30,26 +33,32 @@ enum BlockInsertion: String, CaseIterable, Identifiable {
         case .paragraph: "text.alignleft"
         case .heading: "textformat.size.larger"
         case .quote: "text.quote"
+        case .gallery: "square.grid.2x2"
         case .separator: "minus"
         case .embed: "link"
         }
     }
 
     /// A new block of this kind, empty and ready to be typed into.
-    var kind: Block.Kind {
+    ///
+    /// Nil for a gallery, which has nothing to show until photographs have been chosen, and
+    /// so is built by the editor after the picker rather than here.
+    var kind: Block.Kind? {
         switch self {
         case .paragraph: .paragraph(InlineText(html: ""))
         // H2 rather than H1: the post's title is the H1, so a heading inside the body starts
         // one level down, which is what the imported corpus does too.
         case .heading: .heading(level: 2, text: InlineText(html: ""))
         case .quote: .quote(InlineText(html: ""), attribution: nil)
+        case .gallery: nil
         case .separator: .separator
         case .embed: .embed(url: Self.blankEmbed)
         }
     }
 
-    /// Whether adding this should move the caret into it. A separator has nothing to type.
-    var takesFocus: Bool { self != .separator }
+    /// Whether adding this should move the caret into it. A separator has nothing to type,
+    /// and a gallery is not inserted from here at all.
+    var takesFocus: Bool { self != .separator && self != .gallery }
 
     /// A scheme and no address. `Block.Kind.embed` has to hold a `URL`, and there is no such
     /// thing as an empty one, so this stands in until an address is typed - it is what the
@@ -100,7 +109,7 @@ struct BlockInsertBar: View {
         .menuStyle(.button)
         .menuIndicator(.hidden)
         .onHover { pointerIsOver = $0 }
-        .help("Add a paragraph here, or hold for headings, quotes, separators and embeds")
+        .help("Add a paragraph here, or hold for headings, quotes, galleries and more")
     }
 
     private var rule: some View {

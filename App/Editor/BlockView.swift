@@ -33,8 +33,8 @@ struct BlockView: View {
         case .image(let imageID, let layout):
             ImageBlockView(imageID: imageID, layout: layout, post: $post)
 
-        case .gallery(let imageIDs, let columns):
-            GalleryBlockView(imageIDs: imageIDs, columns: columns, post: $post)
+        case .gallery:
+            GalleryBlockView(block: $block, post: $post)
 
         case .quote(let text, let attribution):
             HStack(spacing: 12) {
@@ -144,23 +144,144 @@ struct ImageBlockView: View {
     }
 }
 
+/// A gallery: the grid the blog will draw, and underneath it the fields that make each
+/// photograph in it editable.
+///
+/// The grid alone was all there was, which meant a photograph inside a gallery had no way to
+/// be given alt text - the one thing this app is most insistent about everywhere else.
 struct GalleryBlockView: View {
-    let imageIDs: [ImageID]
-    let columns: Int
+    @Binding var block: Block
+    @Binding var post: Post
+
+    @State private var showingPhotographs = true
+    @State private var isTarget = false
+
+    @Environment(PostDocument.self) private var document
+    @Environment(ImageDropper.self) private var dropper
+
+    private var imageIDs: [ImageID] { block.galleryImageIDs }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            grid
+            header
+            if showingPhotographs {
+                // Indexed rather than keyed only by id so a row can say where it sits, which
+                // is what the move buttons need.
+                ForEach(Array(imageIDs.enumerated()), id: \.element) { index, imageID in
+                    GalleryImageRow(index: index, imageID: imageID, block: $block, post: $post)
+                }
+            }
+        }
+        // Photographs dropped on a gallery join that gallery, rather than landing at the end
+        // of the post as they would anywhere else. The editor's own drop target is still
+        // there underneath; the innermost one wins for the area the gallery covers.
+        .dropDestination(for: URL.self) { urls, _ in
+            let id = block.id
+            Task { await dropper.addToGallery(urls, of: id, in: document) }
+            return true
+        } isTargeted: { isTarget = $0 }
+        .overlay {
+            if isTarget {
+                RoundedRectangle(cornerRadius: 6).strokeBorder(Color.accentColor, lineWidth: 2)
+            }
+        }
+    }
+
+    private var grid: some View {
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: 4),
+                count: max(1, block.galleryColumns)
+            ),
+            spacing: 4
+        ) {
+            ForEach(imageIDs, id: \.self) { id in
+                PackageImage(imageID: id, maxPixelSize: 600)
+                    .clipShape(.rect(cornerRadius: 3))
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Button {
+                showingPhotographs.toggle()
+            } label: {
+                Label(
+                    "^[\(imageIDs.count) photograph](inflect: true)",
+                    systemImage: showingPhotographs ? "chevron.down" : "chevron.right"
+                )
+                .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+
+            Spacer()
+
+            // Two is the fewest that reads as a grid rather than a stack of images; past
+            // four the blog's 700px column makes each photograph a postage stamp.
+            Stepper(
+                "^[\(block.galleryColumns) column](inflect: true)",
+                value: Binding(get: { block.galleryColumns }, set: { block.galleryColumns = $0 }),
+                in: 2...4
+            )
+            .font(.caption)
+            .fixedSize()
+        }
+        .foregroundStyle(.secondary)
+    }
+}
+
+/// One photograph of a gallery: its thumbnail, its alt text and caption, and where it sits.
+private struct GalleryImageRow: View {
+    let index: Int
+    let imageID: ImageID
+    @Binding var block: Block
     @Binding var post: Post
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: max(1, columns)), spacing: 4) {
-                ForEach(imageIDs, id: \.self) { id in
-                    PackageImage(imageID: id, maxPixelSize: 600)
-                        .clipShape(.rect(cornerRadius: 3))
-                }
-            }
-            Text("Gallery, \(imageIDs.count) images")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: 8) {
+            PackageImage(imageID: imageID, maxPixelSize: 160)
+                .frame(width: 56)
+                .clipShape(.rect(cornerRadius: 3))
+            ImageDetailsEditor(imageID: imageID, post: $post)
+            controls
         }
+    }
+
+    private var controls: some View {
+        VStack(spacing: 0) {
+            move(by: -1, symbol: "chevron.up", help: "Move earlier in the gallery")
+            move(by: 1, symbol: "chevron.down", help: "Move later in the gallery")
+            // No confirmation, unlike removing a whole block: the photograph stays in the
+            // post's assets and undo puts it back without reading anything from disk.
+            Button {
+                block.galleryImageIDs.remove(at: index)
+            } label: {
+                Image(systemName: "minus.circle")
+                    .frame(width: 20, height: 20)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .help("Remove from the gallery")
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    private func move(by offset: Int, symbol: String, help: String) -> some View {
+        let target = index + offset
+        return Button {
+            block.galleryImageIDs.swapAt(index, target)
+        } label: {
+            Image(systemName: symbol)
+                .frame(width: 20, height: 20)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(!block.galleryImageIDs.indices.contains(target))
+        .help(help)
     }
 }
 

@@ -17,10 +17,8 @@ then upload a draft, publish, or update what is already live.
 Posts arrive two ways. `swiftwriter-import` reads a whole-blog WXR export; `swiftwriter-publish
 pull` reads a single post straight off the blog, for one written somewhere other than here.
 
-Still to do: galleries render but nothing creates them - every other block kind can be added
-from the gap between two blocks, but a gallery needs photographs chosen for it first.
-Publishing has been done from the Mac and not yet tried from the iPad - the token is kept on
-the machine that signed in, so the iPad would need its own.
+Still to do: publishing has been done from the Mac and not yet tried from the iPad - the
+token is kept on the machine that signed in, so the iPad would need its own.
 
 ## Requirements
 

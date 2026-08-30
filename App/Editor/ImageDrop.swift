@@ -58,6 +58,65 @@ final class ImageDropper {
         document.post = post
     }
 
+    /// Reads photographs and puts them in a new gallery.
+    ///
+    /// Separate from `add` rather than a flag on it, because the two want opposite things:
+    /// a drop merges into the run of images already at the end of the post, and a gallery is
+    /// a single block that goes exactly where the insert bar was clicked.
+    func addGallery(_ urls: [URL], to document: PostDocument, before id: BlockID?) async {
+        guard !urls.isEmpty else { return }
+        reading += urls.count
+        defer { reading -= urls.count }
+
+        let batch = await Task.detached(priority: .userInitiated) { Self.read(urls) }.value
+        refused = batch.refused
+        guard !batch.images.isEmpty else { return }
+
+        // One assignment, so a gallery of nine photographs is one undo step.
+        var post = document.post
+        for image in batch.images {
+            post.assets[image.asset.id] = image.asset
+            document.images[image.asset.id] = .data(image.data)
+        }
+
+        // In the order they were shot, like a drop - the file picker hands them over in
+        // whatever order the Finder listed them, which is usually by name.
+        let ordered = ImageImport.inCaptureOrder(batch.images) { $0.asset.capture?.captureDate }
+        post.insert(
+            .gallery(imageIDs: ordered.map { $0.asset.id }, columns: 3),
+            before: id
+        )
+        document.post = post
+    }
+
+    /// Adds photographs to a gallery that is already in the post.
+    ///
+    /// The existing photographs keep their order and the new ones go on the end, rather than
+    /// being merged by capture date: a gallery that has been arranged by hand should not
+    /// rearrange itself because a later frame was dropped into it.
+    func addToGallery(_ urls: [URL], of blockID: BlockID, in document: PostDocument) async {
+        guard !urls.isEmpty else { return }
+        reading += urls.count
+        defer { reading -= urls.count }
+
+        let batch = await Task.detached(priority: .userInitiated) { Self.read(urls) }.value
+        refused = batch.refused
+        guard !batch.images.isEmpty else { return }
+
+        // Checked before anything is stored, so a drop that cannot land leaves no
+        // photographs behind in the package with no block referring to them.
+        var post = document.post
+        guard let index = post.blocks.firstIndex(where: { $0.id == blockID }),
+              case .gallery = post.blocks[index].kind
+        else { return }
+        for image in batch.images {
+            post.assets[image.asset.id] = image.asset
+            document.images[image.asset.id] = .data(image.data)
+        }
+        post.blocks[index].galleryImageIDs.append(contentsOf: batch.images.map { $0.asset.id })
+        document.post = post
+    }
+
     private struct Batch: Sendable {
         var images: [ImportedImage]
         var refused: [String]

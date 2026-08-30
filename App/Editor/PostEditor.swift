@@ -1,5 +1,6 @@
 import PostKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct PostEditor: View {
     @Bindable var document: PostDocument
@@ -8,6 +9,12 @@ struct PostEditor: View {
     @State private var dropper = ImageDropper()
     @State private var showFilmstrip = false
     @State private var scrollTarget: BlockID?
+
+    /// The gallery being built. `choosingGallery` drives the picker; `galleryBefore` is the
+    /// block it will go in front of, remembered because the picker is presented on the whole
+    /// editor rather than on the gap that was clicked.
+    @State private var choosingGallery = false
+    @State private var galleryBefore: BlockID?
 
     /// Which paragraph has the caret. Held here rather than inside a block so a newly added
     /// paragraph can be focused by the button that created it.
@@ -22,6 +29,14 @@ struct PostEditor: View {
             }
             editor
         }
+        // Photographs only: a gallery of PDFs is not a thing, and the picker refusing them
+        // up front is kinder than reading them and reporting each as unreadable.
+        .fileImporter(
+            isPresented: $choosingGallery,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: true,
+            onCompletion: makeGallery
+        )
         .inspector(isPresented: $showInspector) {
             PostInspector(document: document)
                 .inspectorColumnWidth(min: 260, ideal: 300, max: 400)
@@ -64,8 +79,23 @@ struct PostEditor: View {
     /// A separator is the exception: there is nothing to type into it, so taking focus would
     /// only pull the caret out of whatever paragraph the writer was in.
     private func add(_ insertion: BlockInsertion, before id: BlockID? = nil) {
-        let added = document.post.insert(insertion.kind, before: id)
+        // A gallery is the one kind that cannot be made empty, so it goes the long way round:
+        // choose the photographs, then build the block from what came back.
+        guard let kind = insertion.kind else {
+            galleryBefore = id
+            choosingGallery = true
+            return
+        }
+        let added = document.post.insert(kind, before: id)
         if insertion.takesFocus { focusedBlock = added }
+    }
+
+    /// Builds the gallery from whatever the picker returned.
+    private func makeGallery(_ result: Result<[URL], any Error>) {
+        let before = galleryBefore
+        galleryBefore = nil
+        guard case let .success(urls) = result, !urls.isEmpty else { return }
+        Task { await dropper.addGallery(urls, to: document, before: before) }
     }
 
     /// The post itself. Split out so the strip and the editor are laid out side by side
@@ -154,6 +184,9 @@ struct PostEditor: View {
                 .frame(maxWidth: 700)
                 .frame(maxWidth: .infinity)
             }
+            // A gallery accepts its own drops, so it needs the same reader the editor uses -
+            // one place counting what is being read, and one place listing what was refused.
+            .environment(dropper)
             // Dropped photographs merge into the run of images at the end of the post.
             .dropDestination(for: URL.self) { urls, _ in
                 Task { await dropper.add(urls, to: document) }
