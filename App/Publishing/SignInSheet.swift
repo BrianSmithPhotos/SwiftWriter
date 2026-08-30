@@ -11,6 +11,9 @@ struct SignInSheet: View {
     /// Which blog this sign-in is for. Prefilled from the inspector so the common case is
     /// two fields and a button.
     let siteID: String
+    /// Handed the site the token was stored for. The sheet is where the site id is usually
+    /// typed, so the inspector has to be told what it was.
+    let onSignedIn: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var model = SignIn()
@@ -47,7 +50,10 @@ struct SignInSheet: View {
                     Task {
                         // openURL is asked for here, on the main actor, and handed over as a
                         // plain closure: the sign-in itself knows nothing about SwiftUI.
-                        if await model.signIn(open: { url in openURL(url) }) { dismiss() }
+                        if await model.signIn(open: { url in openURL(url) }) {
+                            onSignedIn(model.credentials.siteID)
+                            dismiss()
+                        }
                     }
                 }
                 .disabled(model.working || !model.credentials.isComplete)

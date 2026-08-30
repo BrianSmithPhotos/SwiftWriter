@@ -18,9 +18,10 @@ struct PublishSection: View {
     @State private var publisher = PostPublisher()
     @State private var confirmingLive = false
     @State private var signingIn = false
-    /// Bumped after a sign-in so `hasToken` is read again. A Keychain item is not observable,
-    /// so nothing else would tell the view the answer has changed.
-    @State private var tokenGeneration = 0
+    /// Whether there is a token for this site. Held in state and refreshed deliberately: a
+    /// Keychain item is not observable, and reading one from the view body meant a lookup on
+    /// every redraw - which is a keychain prompt the first time a redraw happens to occur.
+    @State private var signedIn = false
 
     private var siteID: String {
         PostPublisher.siteID(for: document, default: defaultSiteID)
@@ -52,7 +53,7 @@ struct PublishSection: View {
             // Whether this Mac can publish at all, before any button is pressed. Finding out
             // at the end of an upload would be the wrong moment.
             LabeledContent("Account") {
-                if hasToken {
+                if signedIn {
                     Button("Sign Out", role: .destructive) { signOut() }
                         .buttonStyle(.borderless)
                 } else {
@@ -64,7 +65,7 @@ struct PublishSection: View {
             HStack {
                 buttons
             }
-            .disabled(publisher.isWorking || siteID.isEmpty || !hasToken)
+            .disabled(publisher.isWorking || siteID.isEmpty || !signedIn)
 
             status
         }
@@ -77,21 +78,30 @@ struct PublishSection: View {
             Text("It goes live on the blog immediately.")
         }
         .sheet(isPresented: $signingIn) {
-            SignInSheet(siteID: siteID)
-                .onDisappear { tokenGeneration += 1 }
+            // The site id is typed in the sheet as often as in the inspector, so it comes
+            // back: signing in and then still being told there is no account, until the same
+            // number is typed a second time, is not an answer anyone would guess at.
+            SignInSheet(siteID: siteID) { signedInSiteID in
+                if record == nil { defaultSiteID = signedInSiteID }
+                refresh()
+            }
         }
+        // Asked once when the section appears, and again whenever the site changes. Not on
+        // every redraw.
+        .task(id: siteID) { refresh() }
     }
 
-    /// Whether there is a stored token for this site.
-    private var hasToken: Bool {
-        _ = tokenGeneration
-        guard !siteID.isEmpty else { return false }
-        return ((try? KeychainTokenStore().load(siteID: siteID)) ?? nil) != nil
+    private func refresh() {
+        guard !siteID.isEmpty else {
+            signedIn = false
+            return
+        }
+        signedIn = ((try? KeychainTokenStore().load(siteID: siteID)) ?? nil) != nil
     }
 
     private func signOut() {
         try? KeychainTokenStore().delete(siteID: siteID)
-        tokenGeneration += 1
+        refresh()
     }
 
     @ViewBuilder
