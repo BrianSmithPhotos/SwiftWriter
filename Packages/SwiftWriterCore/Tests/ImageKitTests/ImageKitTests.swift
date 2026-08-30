@@ -198,3 +198,98 @@ struct ThumbnailTests {
         #expect(image.width == 300)
     }
 }
+
+@Suite("Importing dropped photographs")
+struct ImageImportTests {
+    @Test("An imported image gets an id, a matching filename and its pixel size")
+    func buildsTheAsset() throws {
+        let imported = try ImageImport.make(
+            from: makeJPEG(width: 800, height: 600),
+            originalFileName: "DSCF4259.RAF"
+        )
+        #expect(imported.asset.fileName == "\(imported.asset.id.rawValue).jpeg")
+        #expect(imported.asset.pixelWidth == 800)
+        #expect(imported.asset.pixelHeight == 600)
+        #expect(imported.asset.provenance.originalFileName == "DSCF4259.RAF")
+        #expect(imported.data.isEmpty == false)
+    }
+
+    @Test("Alt text is left empty so the missing-alt warning still fires")
+    func leavesAltTextEmpty() throws {
+        let imported = try ImageImport.make(from: makeJPEG(width: 100, height: 100))
+        #expect(imported.asset.altText.isEmpty)
+    }
+
+    @Test("Capture metadata and the IPTC caption come across")
+    func readsMetadata() throws {
+        let data = try makeJPEG(width: 200, height: 100, metadata: [
+            kCGImagePropertyExifDictionary: [
+                kCGImagePropertyExifDateTimeOriginal: "2025:07:20 14:48:52"
+            ],
+            kCGImagePropertyIPTCDictionary: [
+                kCGImagePropertyIPTCCaptionAbstract: "The chapel at Fort Ross",
+                kCGImagePropertyIPTCCredit: "Brian Smith"
+            ]
+        ])
+        let imported = try ImageImport.make(from: data)
+        #expect(imported.asset.capture?.captureDate != nil)
+        #expect(imported.asset.caption?.plainText == "The chapel at Fort Ross")
+        #expect(imported.asset.credit == "Brian Smith")
+    }
+
+    @Test("An image too large for the web is resized, and its asset records the new size")
+    func resizes() throws {
+        let imported = try ImageImport.make(
+            from: makeJPEG(width: 4000, height: 2000),
+            settings: DerivativeSettings(maxLongEdge: 1000, quality: 0.8)
+        )
+        #expect(imported.asset.pixelWidth == 1000)
+        #expect(imported.asset.pixelHeight == 500)
+    }
+
+    @Test("Something that is not an image is refused rather than imported empty")
+    func refusesNonImages() {
+        #expect(throws: (any Error).self) {
+            try ImageImport.make(from: Data("not a photograph".utf8))
+        }
+    }
+
+    /// Capture order is what makes a drop of seventy frames land already sequenced.
+    private func imported(_ name: String, _ captureDate: Date?) -> ImportedImage {
+        var asset = ImageAsset(id: .makeUnique(), fileName: name)
+        asset.capture = CaptureMetadata(captureDate: captureDate)
+        return ImportedImage(asset: asset, data: Data())
+    }
+
+    @Test("Photographs sort into the order they were taken")
+    func sortsByCaptureTime() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let sorted = ImageImport.inCaptureOrder([
+            imported("third", base.addingTimeInterval(60)),
+            imported("first", base),
+            imported("second", base.addingTimeInterval(30))
+        ])
+        #expect(sorted.map(\.asset.fileName) == ["first", "second", "third"])
+    }
+
+    @Test("A burst sharing one timestamp keeps the order it was dropped in")
+    func sortIsStable() {
+        let shared = Date(timeIntervalSince1970: 1_700_000_000)
+        let sorted = ImageImport.inCaptureOrder([
+            imported("a", shared),
+            imported("b", shared),
+            imported("c", shared)
+        ])
+        #expect(sorted.map(\.asset.fileName) == ["a", "b", "c"])
+    }
+
+    @Test("An undated image sorts last, not first")
+    func undatedSortsLast() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let sorted = ImageImport.inCaptureOrder([
+            imported("screenshot", nil),
+            imported("frame", base)
+        ])
+        #expect(sorted.map(\.asset.fileName) == ["frame", "screenshot"])
+    }
+}

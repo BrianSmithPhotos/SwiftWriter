@@ -5,6 +5,7 @@ struct PostEditor: View {
     @Bindable var document: PostDocument
     @Environment(\.undoManager) private var undoManager
     @State private var showInspector = true
+    @State private var dropper = ImageDropper()
 
     var body: some View {
         ScrollView {
@@ -34,6 +35,28 @@ struct PostEditor: View {
                 ForEach($document.post.blocks) { $block in
                     BlockView(block: $block, post: $document.post)
                 }
+
+                if dropper.isImporting {
+                    Label("Reading photographs", systemImage: "photo.badge.plus")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .symbolEffect(.pulse)
+                }
+                if !dropper.refused.isEmpty {
+                    Label(
+                        "Could not read \(dropper.refused.joined(separator: ", "))",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+                }
+
+                if document.post.blocks.isEmpty {
+                    Text("Drop photographs here. They are added in the order they were taken.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 120)
+                }
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 24)
@@ -41,6 +64,12 @@ struct PostEditor: View {
             // is on screen is what the post will look like.
             .frame(maxWidth: 700)
             .frame(maxWidth: .infinity)
+        }
+        // Dropping onto the post appends the photographs at the end, in capture order.
+        // Where they land is increment two - this one is about getting them in at all.
+        .dropDestination(for: URL.self) { urls, _ in
+            Task { await dropper.add(urls, to: document) }
+            return true
         }
         .inspector(isPresented: $showInspector) {
             PostInspector(document: document)
