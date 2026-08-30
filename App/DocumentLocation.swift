@@ -27,17 +27,35 @@ enum DocumentLocation {
     }
 }
 
-enum DocumentLocationError: LocalizedError {
+/// Conforms three ways on purpose, because it is not yet known which one the framework reads.
+///
+/// `DocumentGroup` exposes no hook for presenting a `makeDocument` failure, and it logged this
+/// error as `networkVolume(name: "...")` - the raw case, so it used `String(describing:)` rather
+/// than `localizedDescription`, and `LocalizedError` alone never reaches the user.
+/// `CustomStringConvertible` therefore makes that log line readable, and `CustomNSError` gives the
+/// bridged `NSError` proper user info in case the framework presents an alert from that instead.
+enum DocumentLocationError: LocalizedError, CustomNSError, CustomStringConvertible {
     case networkVolume(name: String)
 
-    var errorDescription: String? {
-        "This post is on a network share."
-    }
+    private var message: String { "This post is on a network share." }
 
-    var recoverySuggestion: String? {
+    private var suggestion: String {
         switch self {
         case .networkVolume(let name):
             "Copy \(name) to this device and open the copy. Saving a post over a network share can lose it."
         }
+    }
+
+    var errorDescription: String? { message }
+    var recoverySuggestion: String? { suggestion }
+    var description: String { "\(message) \(suggestion)" }
+
+    static var errorDomain: String { "photos.briansmith.SwiftWriter.DocumentLocation" }
+    var errorCode: Int { 1 }
+    var errorUserInfo: [String: Any] {
+        [
+            NSLocalizedDescriptionKey: message,
+            NSLocalizedRecoverySuggestionErrorKey: suggestion,
+        ]
     }
 }
