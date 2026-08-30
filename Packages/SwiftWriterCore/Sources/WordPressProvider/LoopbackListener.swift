@@ -5,19 +5,26 @@ import Foundation
 /// Replaces pasting the address by hand, which could not work: the redirect went to a custom
 /// scheme, nothing on the machine was registered to handle it, and the browser silently gave up
 /// rather than landing anywhere the address could be copied from. A loopback address is what
-/// RFC 8252 recommends for exactly this - a command-line tool has no other way to be redirected to.
+/// RFC 8252 recommends for exactly this.
+///
+/// Lives here rather than in the command-line tool because the Mac app signs in the same way.
+/// `ASWebAuthenticationSession` refuses an http callback, so the app opens the browser itself
+/// and listens here - which also means the redirect already registered with WordPress.com
+/// works for both, with nothing new to register.
 ///
 /// Deliberately not a general web server. It accepts one connection, reads one request line,
 /// answers it, and stops.
-struct LoopbackListener {
-    let port: UInt16
+public struct LoopbackListener: Sendable {
+    public let port: UInt16
 
-    enum Failure: Error, LocalizedError {
+    public init(port: UInt16) { self.port = port }
+
+    public enum Failure: Error, LocalizedError {
         case cannotListen(port: UInt16, reason: String)
         case timedOut(seconds: Int)
         case noRequest
 
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case let .cannotListen(port, reason):
                 "Could not listen on 127.0.0.1:\(port) - \(reason). "
@@ -32,7 +39,7 @@ struct LoopbackListener {
 
     /// - Returns: the full URL the browser asked for, so the caller can read `code` and `state`
     ///   from it exactly as it would from a pasted address.
-    func waitForRedirect(timeoutSeconds: Int) throws -> URL {
+    public func waitForRedirect(timeoutSeconds: Int) throws -> URL {
         let listening = try openSocket()
         defer { close(listening) }
 

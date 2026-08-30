@@ -124,7 +124,7 @@ enum PublisherError: LocalizedError {
         case .unsaved:
             "Save the post before publishing it, so there is somewhere to record what went out."
         case let .noToken(siteID):
-            "Not signed in to site \(siteID). Run: swiftwriter-publish auth"
+            "Not signed in to site \(siteID). Use Sign In, above."
         }
     }
 }

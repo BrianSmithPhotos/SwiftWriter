@@ -8,77 +8,70 @@ enum Commands {
 
     /// Authorises this machine and stores the token.
     ///
-    /// The browser is opened by hand rather than driven: WordPress.com has no device flow,
-    /// and the redirect goes to a custom scheme the CLI cannot receive. So the URL is
-    /// printed, and whatever the browser ends up at is pasted back. The app will do the
-    /// same exchange behind `ASWebAuthenticationSession`, sharing everything below.
+    /// The browser is opened by hand rather than driven: WordPress.com has no device flow.
+    /// Everything after that - the listener, the exchange, the check that the token is for
+    /// the right blog - is `WordPressSignIn`, shared with the app so the two cannot drift.
     static func auth(environment: Environment, store: KeychainTokenStore, siteID: String) async throws {
-        let flow = WordPressOAuth(
+        let credentials = WordPressCredentials(
             clientID: try environment.require("WORDPRESS_CLIENT_ID"),
             clientSecret: try environment.require("WORDPRESS_CLIENT_SECRET"),
-            redirectURI: try environment.require("WORDPRESS_REDIRECT_URI")
+            redirectURI: try environment.require("WORDPRESS_REDIRECT_URI"),
+            siteID: siteID
         )
-        let state = WordPressOAuth.makeState()
 
-        let redirectURI = try environment.require("WORDPRESS_REDIRECT_URI")
-        print("Open this in a browser and approve it:\n")
-        print(flow.authorizationURL(state: state, blogID: siteID).absoluteString)
-        print("")
-
-        let redirect = try await waitForRedirect(to: redirectURI)
-
-        let code = try flow.code(fromRedirect: redirect, expecting: state)
-        let token = try await flow.exchange(code: code)
-
-        // Catches a token granted for a different blog before anything is posted to it.
-        guard token.isUsable(forSiteID: siteID) else {
-            throw CLIError.message("That token is for site \(token.siteID ?? "?"), not \(siteID).")
+        // A redirect this tool cannot be listened for still has a way through: approve it and
+        // paste whatever the browser ended up at. Kept because it is the only recovery when
+        // the registered redirect is a custom scheme nothing on the machine handles.
+        guard credentials.loopbackPort != nil else {
+            try await authByPaste(credentials: credentials, store: store)
+            return
         }
-        try store.save(token, siteID: siteID)
+
+        _ = try await WordPressSignIn.run(credentials: credentials, store: store) { url in
+            print("Open this in a browser and approve it:\n")
+            print(url.absoluteString)
+            print("\nWaiting for the browser on \(credentials.redirectURI) ...")
+            fflush(stdout)
+        }
         print("Stored a token for site \(siteID) in the Keychain.")
     }
 
+    /// The fallback for a redirect that cannot be received: print the URL, read the address back.
+    private static func authByPaste(
+        credentials: WordPressCredentials, store: KeychainTokenStore
+    ) async throws {
+        let flow = WordPressOAuth(
+            clientID: credentials.clientID,
+            clientSecret: credentials.clientSecret,
+            redirectURI: credentials.redirectURI
+        )
+        let state = WordPressOAuth.makeState()
+        print("Open this in a browser and approve it:\n")
+        print(flow.authorizationURL(state: state, blogID: credentials.siteID).absoluteString)
+        print("""
 
-    /// Listens for the redirect when it comes back to loopback, and falls back to asking for it
-    /// to be pasted when it does not.
-    ///
-    /// A custom scheme cannot work here. Nothing registers `swiftwriter://`, so the browser has
-    /// nowhere to send the redirect and stops without changing the address bar, leaving nothing
-    /// to copy. Loopback is the flow a command-line tool can actually receive.
-    private static func waitForRedirect(to redirectURI: String) async throws -> URL {
-        guard let uri = URL(string: redirectURI),
-              uri.scheme == "http",
-              let host = uri.host(), host == "localhost" || host == "127.0.0.1",
-              let port = uri.port.flatMap({ UInt16(exactly: $0) })
-        else {
-            // Whatever is registered is not something this tool can be redirected to. Ask for
-            // the address, which at least works when the browser does land somewhere visible.
-            print("""
-            The redirect goes to \(redirectURI), which this tool cannot receive.
-            Approve it, then copy the address the browser ends up at and paste it here.
-            If the browser stops without changing address, register a loopback redirect
-            such as http://localhost:8722/callback instead.
+        The redirect goes to \(credentials.redirectURI), which this tool cannot receive.
+        Approve it, then copy the address the browser ends up at and paste it here.
+        If the browser stops without changing address, register a loopback redirect
+        such as http://localhost:8722/callback instead.
 
-            """)
-            print("Redirect address: ", terminator: "")
-            // stdout is fully buffered when it is not a terminal, so without this the prompt
-            // sits unseen while readLine waits - which reads as a hang.
-            fflush(stdout)
-            guard let line = readLine(strippingNewline: true), !line.isEmpty,
-                  let pasted = URL(string: line.trimmingCharacters(in: .whitespaces)) else {
-                throw CLIError.message("No address pasted.")
-            }
-            return pasted
+        """)
+        print("Redirect address: ", terminator: "")
+        // stdout is fully buffered when it is not a terminal, so without this the prompt
+        // sits unseen while readLine waits - which reads as a hang.
+        fflush(stdout)
+        guard let line = readLine(strippingNewline: true), !line.isEmpty,
+              let pasted = URL(string: line.trimmingCharacters(in: .whitespaces)) else {
+            throw CLIError.message("No address pasted.")
         }
 
-        print("Waiting for the browser on \(redirectURI) ...")
-        fflush(stdout)
-        let listener = LoopbackListener(port: port)
-        // Off the cooperative pool: the listener blocks in poll and must not hold a thread
-        // that other work needs.
-        return try await Task.detached(priority: .userInitiated) {
-            try listener.waitForRedirect(timeoutSeconds: 300)
-        }.value
+        let code = try flow.code(fromRedirect: pasted, expecting: state)
+        let token = try await flow.exchange(code: code)
+        guard token.isUsable(forSiteID: credentials.siteID) else {
+            throw CLIError.message("That token is for site \(token.siteID ?? "?"), not \(credentials.siteID).")
+        }
+        try store.save(token, siteID: credentials.siteID)
+        print("Stored a token for site \(credentials.siteID) in the Keychain.")
     }
 
     // MARK: - status

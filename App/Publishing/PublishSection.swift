@@ -17,6 +17,10 @@ struct PublishSection: View {
 
     @State private var publisher = PostPublisher()
     @State private var confirmingLive = false
+    @State private var signingIn = false
+    /// Bumped after a sign-in so `hasToken` is read again. A Keychain item is not observable,
+    /// so nothing else would tell the view the answer has changed.
+    @State private var tokenGeneration = 0
 
     private var siteID: String {
         PostPublisher.siteID(for: document, default: defaultSiteID)
@@ -45,10 +49,22 @@ struct PublishSection: View {
                     .font(.callout)
             }
 
+            // Whether this Mac can publish at all, before any button is pressed. Finding out
+            // at the end of an upload would be the wrong moment.
+            LabeledContent("Account") {
+                if hasToken {
+                    Button("Sign Out", role: .destructive) { signOut() }
+                        .buttonStyle(.borderless)
+                } else {
+                    Button("Sign In") { signingIn = true }
+                }
+            }
+            .font(.callout)
+
             HStack {
                 buttons
             }
-            .disabled(publisher.isWorking || siteID.isEmpty)
+            .disabled(publisher.isWorking || siteID.isEmpty || !hasToken)
 
             status
         }
@@ -60,6 +76,22 @@ struct PublishSection: View {
         } message: {
             Text("It goes live on the blog immediately.")
         }
+        .sheet(isPresented: $signingIn) {
+            SignInSheet(siteID: siteID)
+                .onDisappear { tokenGeneration += 1 }
+        }
+    }
+
+    /// Whether there is a stored token for this site.
+    private var hasToken: Bool {
+        _ = tokenGeneration
+        guard !siteID.isEmpty else { return false }
+        return ((try? KeychainTokenStore().load(siteID: siteID)) ?? nil) != nil
+    }
+
+    private func signOut() {
+        try? KeychainTokenStore().delete(siteID: siteID)
+        tokenGeneration += 1
     }
 
     @ViewBuilder
