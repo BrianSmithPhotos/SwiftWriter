@@ -90,22 +90,24 @@ for item in selected {
     let fetches = imported.images
         .filter { !localIDs.contains($0.id) }
         .compactMap { image in image.sourceURL.map { (image.id, $0) } }
-    await withTaskGroup(of: (ImageID, Data?, String?).self) { group in
+    await withTaskGroup(of: FetchedImage.self) { group in
         var running = 0
         var pending = fetches[...]
         func submit() {
             guard let next = pending.popFirst() else { return }
             running += 1
             group.addTask {
-                do { return (next.0, try await store.data(for: next.1), nil) }
-                catch { return (next.0, nil, "\(next.1.lastPathComponent): \(error)") }
+                do { return FetchedImage(id: next.0, data: try await store.data(for: next.1)) }
+                catch {
+                    return FetchedImage(id: next.0, failure: "\(next.1.lastPathComponent): \(error)")
+                }
             }
         }
         for _ in 0..<min(arguments.concurrency, fetches.count) { submit() }
-        while running > 0, let (id, data, failure) = await group.next() {
+        while running > 0, let result = await group.next() {
             running -= 1
-            if let data { fetched[id] = data }
-            if let failure { failedImages.append(failure) }
+            if let data = result.data { fetched[result.id] = data }
+            if let failure = result.failure { failedImages.append(failure) }
             submit()
         }
     }
@@ -131,6 +133,20 @@ if arguments.verify, let output = arguments.output, !arguments.dryRun {
 await printSummary()
 
 // MARK: - Helpers
+
+/// One image off the network, named rather than a tuple.
+///
+/// A `(ImageID, Data?, String?)` here is miscompiled by the Swift 6.4 beta toolchain at `-O`:
+/// every task group result comes back carrying the *first* task's id, so all 975 downloads
+/// land under one key and the import writes a package with a single photograph. A struct with
+/// the same three fields is correct at every optimisation level. Reproducer and the narrowing
+/// that found it are in the notes; revisit when the toolchain ships.
+struct FetchedImage: Sendable {
+    var id: ImageID
+    var data: Data?
+    var failure: String?
+}
+
 
 /// Reads every written package back through the same codec the app will use. A package
 /// that cannot be reopened is a format bug, and it is cheaper to find it here than in a
