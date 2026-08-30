@@ -37,15 +37,6 @@ enum Package {
         try data.write(to: file, options: .atomic)
     }
 
-    static func mimeType(for fileName: String) -> String {
-        switch (fileName as NSString).pathExtension.lowercased() {
-        case "png": "image/png"
-        case "gif": "image/gif"
-        case "webp": "image/webp"
-        case "heic": "image/heic"
-        default: "image/jpeg"
-        }
-    }
 }
 
 /// Dates as a person reads them, in the blog's own zone.

@@ -188,6 +188,11 @@ enum Commands {
 
     // MARK: - The shared path
 
+    /// Everything the three publishing commands have in common.
+    ///
+    /// The decisions live in `PublishRun`, so the app publishes by the same rules. What is
+    /// left here is what only a terminal does: reading the package off disk, printing
+    /// progress, and writing the record back.
     private static func send(
         package: URL, site: WordPressSite, status: PublishStatus,
         scheduledFor: Date?, displayDate: Date?, dryRun: Bool
@@ -200,112 +205,40 @@ enum Commands {
         print("  \(post.blocks.count) blocks, \(post.referencedImageIDs.count) images -> site \(site.siteID) as \(status.rawValue)")
         if let scheduledFor { print("  goes live \(Format.moment(scheduledFor))") }
         if let displayDate { print("  dated \(Format.moment(displayDate))") }
-        let missing = post.imagesNeedingAltText.count
-        if missing > 0 { print("  warning: \(missing) image(s) have no alt text") }
 
         // Every image is decided before anything is sent, so a dry run reports exactly what
         // a real one would do. Anything the blog already holds is reused: republishing is
         // the normal way to add alt text to a live post, and uploading thirty-four
         // photographs again each time would fill the media library with duplicates.
-        struct Planned {
-            let imageID: ImageID
-            let asset: ImageAsset
-            let hash: String
-            let altText: String?
-            let caption: String?
-            let action: MediaAction
+        let plan = try PublishRun.plan(post: post, held: existing) { try loaded.bytes(for: $0) }
+        if plan.missingAltText > 0 {
+            print("  warning: \(plan.missingAltText) image(s) have no alt text")
         }
-
-        var plan: [Planned] = []
-        var counts = (upload: 0, reuse: 0, describe: 0)
-        for imageID in post.referencedImageIDs {
-            guard let asset = post.assets[imageID] else {
-                throw CLIError.message("Image \(imageID.rawValue) has no sidecar.")
-            }
-            let hash = UploadedMedia.hash(of: try loaded.bytes(for: imageID))
-            let altText = asset.altText.isEmpty ? nil : asset.altText
-            let caption = asset.caption?.html
-            let action = MediaAction.decide(
-                held: existing?.media[imageID], contentHash: hash, altText: altText, caption: caption
-            )
-            switch action {
-            case .upload: counts.upload += 1
-            case .reuse: counts.reuse += 1
-            case .describe: counts.describe += 1
-            }
-            plan.append(Planned(
-                imageID: imageID, asset: asset, hash: hash,
-                altText: altText, caption: caption, action: action
-            ))
-        }
-        print("  images: \(counts.upload) to upload, \(counts.reuse) unchanged, \(counts.describe) to re-describe")
+        print("  images: \(plan.toUpload) to upload, \(plan.unchanged) unchanged, \(plan.toDescribe) to re-describe")
 
         if dryRun {
             print("  dry run - nothing sent")
             return
         }
 
-        try await site.authenticate()
-
-        // Media first: the body cannot be rendered until every image has a remote URL.
-        var media: [ImageID: RemoteMedia] = [:]
-        var uploads: [ImageID: UploadedMedia] = [:]
-
-        for planned in plan {
-            let held: UploadedMedia
-            switch planned.action {
-            case let .reuse(known):
-                held = known
-
-            case let .describe(known):
-                // Empty rather than nil, so clearing alt text in the editor clears it on the
-                // blog instead of leaving the old wording in place.
-                try await site.updateMediaDetails(
-                    remoteID: known.remoteID,
-                    altText: planned.altText ?? "", caption: planned.caption ?? ""
-                )
-                held = known
-                print("  described \(planned.asset.fileName) -> \(known.remoteID)")
-
-            case .upload:
-                let uploaded = try await site.uploadMedia(MediaUpload(
-                    imageID: planned.imageID,
-                    fileName: planned.asset.fileName,
-                    mimeType: Package.mimeType(for: planned.asset.fileName),
-                    data: try loaded.bytes(for: planned.imageID),
-                    altText: planned.altText,
-                    caption: planned.caption
-                ))
-                held = UploadedMedia(
-                    remoteID: uploaded.remoteID, url: uploaded.url, contentHash: planned.hash
-                )
-                print("  uploaded \(planned.asset.fileName) -> \(uploaded.remoteID)")
+        let record = try await PublishRun.send(
+            plan, post: post, to: site, status: status,
+            scheduledFor: scheduledFor, displayDate: displayDate,
+            remotePostID: existing?.remotePostID,
+            bytes: { try loaded.bytes(for: $0) }
+        ) { step in
+            switch step {
+            case let .uploaded(fileName, remoteID): print("  uploaded \(fileName) -> \(remoteID)")
+            case let .described(fileName, remoteID): print("  described \(fileName) -> \(remoteID)")
+            case let .finished(result):
+                print("  \(result.status.rawValue) as post \(result.remotePostID)")
+                if let url = result.remoteURL { print("  \(url.absoluteString)") }
             }
-
-            media[planned.imageID] = RemoteMedia(
-                imageID: planned.imageID, remoteID: held.remoteID, url: held.url
-            )
-            uploads[planned.imageID] = UploadedMedia(
-                remoteID: held.remoteID, url: held.url, contentHash: planned.hash,
-                altText: planned.altText, caption: planned.caption
-            )
         }
 
-        let result = try await site.publish(PublishRequest(
-            post: post, status: status, scheduledFor: scheduledFor, displayDate: displayDate,
-            media: media, remotePostID: existing?.remotePostID
-        ))
-
-        let record = PublishRecord.make(
-            from: result, providerID: WordPressSite.providerID, siteID: site.siteID,
-            contentHash: try post.contentHash(), scheduledFor: scheduledFor, media: uploads
-        )
         try Package.writeRecords(
             loaded.snapshot.publishRecords.updating(with: record), into: package
         )
-
-        print("  \(result.status.rawValue) as post \(result.remotePostID)")
-        if let url = result.remoteURL { print("  \(url.absoluteString)") }
     }
 
     /// Refuses an action that changes the live blog unless it was asked for explicitly.

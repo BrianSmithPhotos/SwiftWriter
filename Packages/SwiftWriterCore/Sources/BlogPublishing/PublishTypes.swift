@@ -110,3 +110,27 @@ public enum PublishError: Error, Equatable {
     /// The provider answered, but not with something we can use.
     case providerRefused(String)
 }
+
+/// One wording for both callers. The command line prints `"\(error)"` and the app shows
+/// `localizedDescription`, and a publish failure the writer cannot act on is no use to
+/// either of them.
+extension PublishError: LocalizedError, CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case let .unsupported(what):
+            "This blog cannot publish \(what.names.formatted(.list(type: .and)))."
+        case let .missingMedia(imageID):
+            "Image \(imageID.rawValue) has no sidecar, so the post cannot be rendered."
+        case .invalidSchedule:
+            "Scheduling needs a date in the future."
+        case .backdateNeedsPublished:
+            "Only a post that is already live can be given an earlier date."
+        case .notAuthenticated:
+            "Not signed in to this blog."
+        case let .providerRefused(reason):
+            reason
+        }
+    }
+
+    public var errorDescription: String? { description }
+}
