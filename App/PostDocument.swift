@@ -57,8 +57,14 @@ final class PostDocument: Document {
     static var readableContentTypes: [UTType] { [.swiftWriterPost] }
 
     func reader(configuration: sending ReadConfiguration) -> sending FileWrapperDocumentReader<PostSnapshot> {
-        FileWrapperDocumentReader(configuration) { wrapper in
-            try PostPackage.makeSnapshot(from: wrapper)
+        let urlConfiguration = self.configuration
+        return FileWrapperDocumentReader(configuration) { wrapper in
+            // Refused here rather than in makeDocument because a makeDocument failure is only
+            // logged - the framework never puts it in front of anyone. A read failure is the
+            // ordinary document-open error path, so this is the throw with a chance of being
+            // shown. See DocumentLocation for why a network share is refused at all.
+            try DocumentLocation.check(await MainActor.run(body: { urlConfiguration?.fileURL }))
+            return try PostPackage.makeSnapshot(from: wrapper)
         }
     }
 
