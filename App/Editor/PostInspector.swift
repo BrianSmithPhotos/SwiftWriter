@@ -4,13 +4,38 @@ import SwiftUI
 struct PostInspector: View {
     @Bindable var document: PostDocument
 
+    /// Whether the post is on the blog somewhere a link can point at. A draft is not, so
+    /// its address can still be changed.
+    private var isLive: Bool {
+        document.publishRecords.contains { $0.status == .published || $0.status == .scheduled }
+    }
+
     var body: some View {
         Form {
             Section("Post") {
-                TextField("Slug", text: Binding(
-                    get: { document.post.slug ?? "" },
-                    set: { document.post.slug = $0.isEmpty ? nil : $0 }
-                ))
+                // The last part of the post's public web address. "Slug" is WordPress's
+                // word for it and means nothing to anyone else.
+                //
+                // Editable only until the post is live. After that the address is what
+                // every existing link points at, so changing it and updating would break
+                // all of them - including the URL recorded in publishing.json.
+                if isLive {
+                    LabeledContent("Web address") {
+                        Text(document.post.slug ?? "-")
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                } else {
+                    TextField(
+                        "Web address",
+                        text: Binding(
+                            get: { document.post.slug ?? "" },
+                            set: { document.post.slug = $0.isEmpty ? nil : $0 }
+                        ),
+                        // Empty is the good default: the blog builds one from the title.
+                        prompt: Text("Made from the title")
+                    )
+                }
                 TokenField(label: "Categories", tokens: $document.post.categories)
                 TokenField(label: "Tags", tokens: $document.post.tags)
             }
