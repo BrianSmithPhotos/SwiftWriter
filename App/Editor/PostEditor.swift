@@ -97,12 +97,10 @@ struct PostEditor: View {
                             BlockInsertBar { addParagraph(before: block.id) }
                             BlockView(block: $block, post: $document.post, focus: $focusedBlock)
                                 .id(block.id)
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        document.post.removeBlock(id: block.id)
-                                    } label: {
-                                        Label("Remove from Post", systemImage: "trash")
-                                    }
+                                // In the margin as an overlay, so adding it moves no text.
+                                .overlay(alignment: .topLeading) {
+                                    BlockRemoveButton { document.post.removeBlock(id: block.id) }
+                                        .offset(x: -26)
                                 }
                         }
                     }
