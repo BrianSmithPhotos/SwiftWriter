@@ -15,10 +15,20 @@ struct Filmstrip: View {
 
     var body: some View {
         List {
-            ForEach(imageBlocks) { block in
+            ForEach(Array(imageBlocks.enumerated()), id: \.element.id) { offset, block in
                 row(for: block)
                     .contentShape(.rect)
                     .onTapGesture { scrollTarget = block.id }
+                    // The menu is the affordance that exists on both platforms. onDelete
+                    // gives a swipe on the iPad and nothing at all on the Mac, so on its own
+                    // there would be no way to remove a photograph with a mouse.
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            post.removeImageBlocks(atOffsets: IndexSet(integer: offset))
+                        } label: {
+                            Label("Remove from Post", systemImage: "trash")
+                        }
+                    }
             }
             .onMove(perform: move)
             .onDelete(perform: delete)
