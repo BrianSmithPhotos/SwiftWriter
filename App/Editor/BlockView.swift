@@ -6,11 +6,17 @@ struct BlockView: View {
     @Binding var block: Block
     @Binding var post: Post
 
+    /// The editor's caret. Passed down so a paragraph the writer just added can be typed
+    /// into straight away - an empty paragraph is invisible, and hunting for it is worse
+    /// than having no button.
+    var focus: FocusState<BlockID?>.Binding
+
     var body: some View {
         switch block.kind {
         case .paragraph(let text):
             InlineTextEditor(text: binding(to: text) { .paragraph($0) }, prompt: "Paragraph")
                 .font(.body)
+                .focused(focus, equals: block.id)
 
         case .heading(let level, let text):
             HStack(alignment: .firstTextBaseline, spacing: 8) {

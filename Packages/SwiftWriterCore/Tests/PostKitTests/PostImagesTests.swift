@@ -72,3 +72,58 @@ struct PostImagesTests {
         #expect(subject.orphanedImageIDs == [id])
     }
 }
+
+/// Writing is added between photographs, so insertion has to land where it was asked to and
+/// hand back something the editor can focus.
+@Suite("Adding and removing blocks")
+struct PostEditingTests {
+    private func post(_ count: Int) -> Post {
+        var post = Post(title: "Test")
+        post.blocks = (0..<count).map { Block(kind: .paragraph(.plain("p\($0)"))) }
+        return post
+    }
+
+    private func texts(_ post: Post) -> [String] {
+        post.blocks.map { block in
+            if case let .paragraph(text) = block.kind { text.html } else { "?" }
+        }
+    }
+
+    @Test("A paragraph goes in ahead of the block the button sits above")
+    func insertsBefore() {
+        var subject = post(3)
+        let second = subject.blocks[1].id
+        subject.insertParagraph(before: second)
+        #expect(texts(subject) == ["p0", "", "p1", "p2"])
+    }
+
+    @Test("No block named means the end of the post")
+    func insertsAtEnd() {
+        var subject = post(2)
+        subject.insertParagraph()
+        #expect(texts(subject) == ["p0", "p1", ""])
+    }
+
+    @Test("The first paragraph of an empty post is allowed")
+    func insertsIntoNothing() {
+        var subject = post(0)
+        subject.insertParagraph()
+        #expect(subject.blocks.count == 1)
+    }
+
+    @Test("The new block's id is returned, and is its own")
+    func returnsAFocusableID() {
+        var subject = post(1)
+        let existing = subject.blocks[0].id
+        let added = subject.insertParagraph()
+        #expect(added != existing)
+        #expect(subject.blocks.last?.id == added)
+    }
+
+    @Test("Removing a block leaves the rest in order")
+    func removesOne() {
+        var subject = post(3)
+        subject.removeBlock(id: subject.blocks[1].id)
+        #expect(texts(subject) == ["p0", "p2"])
+    }
+}

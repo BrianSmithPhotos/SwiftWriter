@@ -9,6 +9,10 @@ struct PostEditor: View {
     @State private var showFilmstrip = false
     @State private var scrollTarget: BlockID?
 
+    /// Which paragraph has the caret. Held here rather than inside a block so a newly added
+    /// paragraph can be focused by the button that created it.
+    @FocusState private var focusedBlock: BlockID?
+
     var body: some View {
         HStack(spacing: 0) {
             if showFilmstrip {
@@ -54,6 +58,12 @@ struct PostEditor: View {
         #endif
     }
 
+    /// Adds an empty paragraph and puts the caret in it. One mutation of `post`, so it is
+    /// one undo step rather than two.
+    private func addParagraph(before id: BlockID? = nil) {
+        focusedBlock = document.post.insertParagraph(before: id)
+    }
+
     /// The post itself. Split out so the strip and the editor are laid out side by side
     /// while every modifier that belongs to the whole screen stays on the container.
     private var editor: some View {
@@ -83,9 +93,22 @@ struct PostEditor: View {
                     Divider()
 
                     ForEach($document.post.blocks) { $block in
-                        BlockView(block: $block, post: $document.post)
-                            .id(block.id)
+                        VStack(alignment: .leading, spacing: 8) {
+                            BlockInsertBar { addParagraph(before: block.id) }
+                            BlockView(block: $block, post: $document.post, focus: $focusedBlock)
+                                .id(block.id)
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        document.post.removeBlock(id: block.id)
+                                    } label: {
+                                        Label("Remove from Post", systemImage: "trash")
+                                    }
+                                }
+                        }
                     }
+
+                    // The last gap, so a post can be finished with prose rather than a picture.
+                    BlockInsertBar { addParagraph() }
 
                     if dropper.reading > 0 {
                         Label(
