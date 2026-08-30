@@ -23,10 +23,3 @@ public extension Post {
         blocks.removeAll { $0.id == id }
     }
 }
-
-public extension Post {
-    /// Whether the body already displays this image, hero or not.
-    func bodyShows(_ imageID: ImageID) -> Bool {
-        blocks.contains { $0.imageIDs.contains(imageID) }
-    }
-}

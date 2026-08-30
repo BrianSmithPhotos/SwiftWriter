@@ -120,15 +120,6 @@ struct PostEditingTests {
         #expect(subject.blocks.last?.id == added)
     }
 
-    @Test("A hero already in the body is known to be there")
-    func heroInBody() {
-        var subject = Post(title: "Test")
-        let id = ImageID(rawValue: "image1")!
-        subject.blocks = [Block(kind: .image(imageID: id, layout: .full))]
-        #expect(subject.bodyShows(id))
-        #expect(!subject.bodyShows(ImageID(rawValue: "image2")!))
-    }
-
     @Test("Removing a block leaves the rest in order")
     func removesOne() {
         var subject = post(3)

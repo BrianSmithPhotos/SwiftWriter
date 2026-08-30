@@ -70,10 +70,7 @@ struct PostEditor: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Only shown here when the hero is not already in the body. When it is,
-                    // the filled star in its margin says so instead - drawing the same
-                    // photograph twice in one editor reads like a mistake.
-                    if let hero = document.post.heroImageID, !document.post.bodyShows(hero) {
+                    if let hero = document.post.heroImageID {
                         VStack(alignment: .leading, spacing: 6) {
                             PackageImage(imageID: hero)
                                 .clipShape(.rect(cornerRadius: 6))
