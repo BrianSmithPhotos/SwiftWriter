@@ -6,7 +6,7 @@ import WordPressProvider
 /// The publishing controls in the inspector.
 ///
 /// What the buttons offer follows what the blog already holds. That is not politeness: an
-/// update always sends a status, so a "Save Draft" pressed on a live post would take it off
+/// update always sends a status, so an "Upload Draft" pressed on a live post would take it off
 /// the blog. A post that is live can only be updated as live.
 struct PublishSection: View {
     @Bindable var document: PostDocument
@@ -120,7 +120,10 @@ struct PublishSection: View {
                 .buttonStyle(.borderedProminent)
 
         case .draft, nil:
-            Button("Save Draft") { send(.draft) }
+            // "Upload", not "Save": this sends the post to the blog as a draft. In a
+            // document app Save already means writing the file, and reading it that way
+            // would make a button that uploads photographs look like it does nothing.
+            Button("Upload Draft") { send(.draft) }
             Button("Publish") { confirmingLive = true }
                 .buttonStyle(.borderedProminent)
         }

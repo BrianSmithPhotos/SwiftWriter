@@ -71,9 +71,16 @@ public enum PostImporter {
         // through the attachment items the export carries.
         var heroImageID: ImageID?
         if let thumbnailID = item.meta["_thumbnail_id"] {
-            if let attachment = attachments[thumbnailID],
-               let urlString = attachment.attachmentURL,
-               let url = URL(string: urlString) {
+            if let alreadyShown = images.first(where: { $0.wordPressID == thumbnailID }) {
+                // The post already shows this photograph. Naming the thumbnail a second
+                // image downloaded the same file twice, put two copies of one picture in
+                // the package, and - because each copy had its own id - uploaded a
+                // duplicate to the media library on the first publish.
+                heroImageID = alreadyShown.id
+                report.hasHeroImage = true
+            } else if let attachment = attachments[thumbnailID],
+                      let urlString = attachment.attachmentURL,
+                      let url = URL(string: urlString) {
                 let hero = ParsedImage(
                     id: .makeUnique(),
                     wordPressID: thumbnailID,

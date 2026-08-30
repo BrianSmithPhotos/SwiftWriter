@@ -113,6 +113,29 @@ struct PostImporterTests {
         #expect(post.postDate == date("2025-07-21T20:00:00Z"))
     }
 
+    @Test("A thumbnail already shown in the body is the same photograph, not a second one")
+    func heroReusesABodyImage() throws {
+        let document = try makeDocument()
+        var item = try #require(document.posts.first { $0.postID == "18683" })
+        // 901 is the second body image. WordPress names the same attachment twice - once in
+        // the body, once as the thumbnail - and taking it at its word downloaded the file
+        // twice and put two copies of one picture in the package.
+        item.meta["_thumbnail_id"] = "901"
+
+        let imported = PostImporter.makePost(
+            from: item, attachments: document.attachmentsByID,
+            options: ImportOptions(siteID: "1")
+        )
+        #expect(imported.report.hasHeroImage)
+        // Two body images, and no third copy of one of them.
+        #expect(imported.images.count == 2)
+        let hero = try #require(imported.post.heroImageID)
+        #expect(imported.images.contains { $0.id == hero && $0.wordPressID == "901" })
+        // One asset, so one upload: a package with the photograph twice would put a
+        // duplicate in the media library the first time it was published.
+        #expect(imported.post.assets.count == 2)
+    }
+
     @Test("Selection honours the date floor and excludes trash by default")
     func selection() throws {
         let document = try makeDocument()
