@@ -37,6 +37,11 @@ final class PostDocument: Document {
         self.configuration = configuration
     }
 
+    /// The package on disk, once there is one. Nil for a document that has never been
+    /// saved, which is why publishing asks for a save first: there is nowhere to record it.
+    @MainActor
+    var url: URL? { configuration?.fileURL }
+
     /// Where an image's bytes live right now: in memory if it was just added, otherwise
     /// in the saved package.
     @MainActor

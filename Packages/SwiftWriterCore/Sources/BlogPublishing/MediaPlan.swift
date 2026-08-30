@@ -6,7 +6,7 @@ import PostKit
 /// Pure, and kept out of the tool that drives it, because this is the decision that stops a
 /// republish from filling the media library with duplicates - and getting it wrong is not
 /// visible until a blog has four copies of every photograph.
-public enum MediaAction: Equatable {
+public enum MediaAction: Equatable, Sendable {
     /// Not held yet, or the pixels have changed. Send the bytes.
     case upload
     /// Held, and nothing about it has changed. Send nothing.

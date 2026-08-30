@@ -10,12 +10,12 @@ import PostKit
 public enum PublishRun {
     /// The pixels for one image. The command line reads them out of the package on disk; the
     /// app usually has them in memory already.
-    public typealias Bytes = (ImageID) throws -> Data
+    public typealias Bytes = @Sendable (ImageID) throws -> Data
 
     /// What a publish would do, worked out before anything is sent, so a dry run reports
     /// exactly what the real thing goes on to do.
-    public struct Plan {
-        public struct Item {
+    public struct Plan: Sendable {
+        public struct Item: Sendable {
             public let imageID: ImageID
             public let asset: ImageAsset
             public let hash: String
@@ -84,7 +84,7 @@ public enum PublishRun {
         displayDate: Date? = nil,
         remotePostID: String? = nil,
         bytes: Bytes,
-        step: (Step) -> Void = { _ in }
+        step: @Sendable (Step) -> Void = { _ in }
     ) async throws -> PublishRecord {
         try await provider.authenticate()
 

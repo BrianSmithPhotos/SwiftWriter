@@ -27,14 +27,7 @@ struct PostInspector: View {
             }
 
             // The reason this app exists: a post that remembers where and when it went out.
-            Section("Publishing") {
-                if document.publishRecords.isEmpty {
-                    Text("Not published").foregroundStyle(.secondary)
-                }
-                ForEach(document.publishRecords) { record in
-                    PublishRecordRow(record: record, post: document.post)
-                }
-            }
+            PublishSection(document: document)
         }
         .formStyle(.grouped)
     }

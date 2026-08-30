@@ -32,6 +32,10 @@ targets:
         product: ImageKit
       - package: SwiftWriterCore
         product: AltTextKit
+      - package: SwiftWriterCore
+        product: BlogPublishing
+      - package: SwiftWriterCore
+        product: WordPressProvider
     info:
       path: App/Info.plist
       properties:
