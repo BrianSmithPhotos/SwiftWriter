@@ -14,6 +14,8 @@ swiftwriter-publish - publish a .swiftpost to WordPress
 
   auth                          authorise this machine and store a token in the Keychain
   status <package>              show what is stored for a package, and the next free slot
+  pull <post-id>                read a post off the blog and write it as a new .swiftpost,
+                                for a post written somewhere other than this app
   draft <package>               upload the images and create or update a draft.
                                 Needs --yes if the post is already live
   update <package>              revise a published or scheduled post in place, which is
@@ -26,6 +28,8 @@ swiftwriter-publish - publish a .swiftpost to WordPress
 Options
   --site <id>                   site id (default: WORDPRESS_SITE_ID from .env)
   --at <date>                   an explicit slot, as 2026-09-01T08:00:00
+  --output <dir>                where pull writes the package (default: this directory)
+  --force                       let pull replace a package that is already there
   --yes                         confirm an action that changes the live blog
   --dry-run                     say what would be sent, send nothing
 """
@@ -41,7 +45,7 @@ while index < raw.count {
     let argument = raw[index]
     if argument.hasPrefix("--") {
         let name = String(argument.dropFirst(2))
-        if ["yes", "dry-run", "help"].contains(name) {
+        if ["yes", "dry-run", "force", "help"].contains(name) {
             flags.insert(name)
             index += 1
         } else {
@@ -92,6 +96,18 @@ do {
         })
     }
 
+    /// The reader for pulling a post back off the blog. Separate from `site` because it
+    /// only reads: nothing it does can change what is published.
+    func fetcher() throws -> RemotePostFetcher {
+        let id = try siteID()
+        return RemotePostFetcher(siteID: id, token: {
+            guard let stored = try store.load(siteID: id) else {
+                throw CLIError.message("No token for site \(id). Run: swiftwriter-publish auth")
+            }
+            return stored.accessToken
+        })
+    }
+
     func package() throws -> URL {
         guard positional.count > 1 else {
             throw CLIError.message("Which package? Pass the path to a .swiftpost.")
@@ -109,6 +125,16 @@ do {
 
     case "status":
         try Commands.status(package: try package(), siteID: try siteID(), store: store)
+
+    case "pull":
+        guard positional.count > 1 else {
+            throw CLIError.message("Which post? Pass the WordPress post id.")
+        }
+        try await Commands.pull(
+            postID: positional[1], fetcher: try fetcher(), siteID: try siteID(),
+            into: URL(filePath: options["output"] ?? ".").standardizedFileURL,
+            force: flags.contains("force"), dryRun: dryRun
+        )
 
     case "draft":
         try await Commands.draft(

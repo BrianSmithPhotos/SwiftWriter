@@ -49,13 +49,15 @@ xcodegen generate
 ```sh
 swiftwriter-import   --input export.xml --output Corpus/ --since 2025-01-01
 swiftwriter-alt      <package or directory> [--provider ollama|apple] [--write]
-swiftwriter-publish  auth | status | draft | schedule | backdate  <package>
+swiftwriter-publish  auth | status | draft | update | schedule | backdate  <package>
+swiftwriter-publish  pull <post-id> --output <dir>
 ```
 
 `swiftwriter-alt` prints and stops unless `--write` is passed, and never touches the blog.
 `swiftwriter-publish` changes nothing live without `--yes`, and `--dry-run` reports exactly
 what a real run would send. `backdate` moves a post that has already gone live back to the
-day its newest photograph was taken.
+day its newest photograph was taken. `pull` goes the other way: it reads a post off the
+blog into a new `.swiftpost`, for a post that was written somewhere other than this app.
 
 ## Document format
 

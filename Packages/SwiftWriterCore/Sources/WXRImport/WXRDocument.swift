@@ -19,6 +19,10 @@ public struct WXRItem: Sendable, Equatable {
     public var categories: [String] = []
     public var tags: [String] = []
     public var meta: [String: String] = [:]
+
+    /// Every field has a default, so a caller filling in only what it has - the REST API
+    /// carries no menu order or comment status - does not have to name the rest.
+    public init() {}
 }
 
 public struct WXRDocument: Sendable {

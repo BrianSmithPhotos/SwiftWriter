@@ -27,9 +27,13 @@ let package = Package(
         // tidying and the retry, with the model behind a protocol so no backend is baked in.
         .target(name: "AltTextKit", dependencies: ["PostKit"]),
         // WordPress: renders blocks to Gutenberg markup, and talks to public-api.wordpress.com.
-        .target(name: "WordPressProvider", dependencies: ["PostKit", "BlogPublishing"]),
-        // Reads a WordPress WXR export into posts. Used to seed the test corpus.
-        .target(name: "WXRImport", dependencies: ["PostKit"]),
+        // WXRImport is a dependency so pulling a post off the blog can hand it to the same
+        // importer the export file goes through, rather than a second conversion that drifts.
+        .target(name: "WordPressProvider", dependencies: ["PostKit", "BlogPublishing", "WXRImport"]),
+        // Reads a WordPress WXR export into posts. Used to seed the test corpus. Depends on
+        // ImageKit because finishing a package means building each web derivative, and that
+        // step is shared with pulling a single post off the blog.
+        .target(name: "WXRImport", dependencies: ["PostKit", "ImageKit"]),
         .executableTarget(
             name: "swiftwriter-import",
             dependencies: ["PostKit", "ImageKit", "WXRImport"]
@@ -40,10 +44,12 @@ let package = Package(
         ),
         .executableTarget(
             name: "swiftwriter-publish",
-            dependencies: ["PostKit", "BlogPublishing", "WordPressProvider"]
+            // WXRImport for `pull`: a post read off the blog goes through the same importer
+            // and the same package assembly as one read from an export file.
+            dependencies: ["PostKit", "BlogPublishing", "WordPressProvider", "WXRImport"]
         ),
         .testTarget(name: "PostKitTests", dependencies: ["PostKit"]),
-        .testTarget(name: "WXRImportTests", dependencies: ["WXRImport", "PostKit"]),
+        .testTarget(name: "WXRImportTests", dependencies: ["WXRImport", "ImageKit", "PostKit"]),
         .testTarget(name: "ImageKitTests", dependencies: ["ImageKit", "PostKit"]),
         .testTarget(name: "BlogPublishingTests", dependencies: ["BlogPublishing", "PostKit"]),
         .testTarget(name: "AltTextKitTests", dependencies: ["AltTextKit", "PostKit"]),

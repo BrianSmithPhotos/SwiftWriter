@@ -110,78 +110,14 @@ for item in selected {
         }
     }
 
-    var sources: [ImageID: ImageSource] = [:]
-    // What the blog already holds, byte for byte, so a republish updates the existing
-    // attachment instead of uploading a second copy of a photograph that is already live.
-    var uploaded: [ImageID: UploadedMedia] = [:]
-    for image in imported.images {
-        guard var asset = imported.post.assets[image.id] else { continue }
-        guard let data = fetched[image.id] else {
-            imported.post.assets[image.id] = nil
-            continue
-        }
-
-        let derivative = try WebDerivative.make(from: data, settings: derivativeSettings)
-        derivative.passedThrough ? (passedThroughCount += 1) : (resizedCount += 1)
-
-        asset.fileName = "\(image.id.rawValue).\(derivative.fileExtension)"
-        asset.pixelWidth = derivative.pixelWidth
-        asset.pixelHeight = derivative.pixelHeight
-
-        if let facts = try? ImageMetadataReader.read(data: data) {
-            asset.capture = facts.capture
-            asset.credit = facts.credit
-            // The photographer's IPTC caption is a better starting point than nothing, but
-            // it never overrides a caption written into the post.
-            if asset.caption == nil, let embedded = facts.embeddedCaption {
-                asset.caption = InlineText.plain(embedded)
-            }
-        }
-
-        imported.post.assets[image.id] = asset
-        sources[image.id] = .data(derivative.data)
-
-        // Only an image taken from the blog and kept byte for byte can be claimed as held.
-        // A derivative built from a camera original is a better picture than the one that is
-        // live, and recording it here would claim the blog already had it - so the larger
-        // image would never go up. Left out of the map, it uploads on the next publish.
-        //
-        // The alt text and caption recorded are the blog's own, not the asset's: the asset
-        // may since have taken an IPTC caption the attachment has never been told about,
-        // and that difference is exactly what should be sent on the next publish.
-        if !localIDs.contains(image.id), derivative.passedThrough,
-           let remoteID = image.wordPressID, let sourceURL = image.sourceURL {
-            uploaded[image.id] = UploadedMedia(
-                remoteID: remoteID,
-                url: sourceURL,
-                contentHash: UploadedMedia.hash(of: derivative.data),
-                altText: image.altText.isEmpty ? nil : image.altText,
-                caption: image.caption?.html
-            )
-        }
-    }
-
-    // Anything that failed to download is pruned so the package never references an asset
-    // it does not hold.
-    let held = Set(imported.post.assets.keys)
-    imported.post.blocks = imported.post.blocks.compactMap { prune($0, keeping: held) }
-    if let hero = imported.post.heroImageID, !held.contains(hero) { imported.post.heroImageID = nil }
-    imported.report.imageCount = imported.post.assets.count
-    imported.report.imagesWithoutAltText = imported.post.imagesNeedingAltText.count
-
-    // The hash has to be taken here, not in the importer. Downloading each image rewrites
-    // its asset - real file extension, pixel size, EXIF, an IPTC caption - and all of that
-    // is inside the hash, so a hash taken before the fetch could never match the package
-    // that ends up on disk, and every imported post would open looking edited.
-    imported.publishRecord.contentHash = try? imported.post.contentHash()
-    imported.publishRecord.media = uploaded.filter { imported.post.assets[$0.key] != nil }
-
-    let snapshot = PostSnapshot(
-        post: imported.post,
-        publishRecords: [imported.publishRecord],
-        images: sources
+    let assembled = try PackageAssembly.assemble(
+        imported, bytes: fetched, fromOriginals: localIDs, settings: derivativeSettings
     )
-    try PostPackage.makeFileWrapper(from: snapshot, previous: nil)
+    passedThroughCount += assembled.passedThrough
+    resizedCount += assembled.resized
+    imported.report = assembled.report
+
+    try PostPackage.makeFileWrapper(from: assembled.snapshot, previous: nil)
         .write(to: url, options: .atomic, originalContentsURL: nil)
 
     print("\(label)  [\(imported.report.imageCount) images]")
@@ -248,19 +184,6 @@ func verifyPackages(in directory: URL) throws {
     } else {
         print("failures             \(failures.count)")
         for failure in failures.prefix(20) { print("    \(failure)") }
-    }
-}
-
-func prune(_ block: Block, keeping held: Set<ImageID>) -> Block? {
-    switch block.kind {
-    case let .image(imageID, _):
-        held.contains(imageID) ? block : nil
-    case let .gallery(imageIDs, columns):
-        imageIDs.filter(held.contains).isEmpty
-            ? nil
-            : Block(id: block.id, kind: .gallery(imageIDs: imageIDs.filter(held.contains), columns: columns))
-    default:
-        block
     }
 }
 

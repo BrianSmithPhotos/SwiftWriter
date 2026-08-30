@@ -2,6 +2,7 @@ import Foundation
 import BlogPublishing
 import PostKit
 import WordPressProvider
+import WXRImport
 
 enum Commands {
     // MARK: - auth
@@ -212,6 +213,98 @@ enum Commands {
             package: package, site: site, status: .published,
             scheduledFor: nil, displayDate: shot, dryRun: dryRun
         )
+    }
+
+    // MARK: - pull
+
+    /// Reads a post off the blog and writes it as a new `.swiftpost`.
+    ///
+    /// For a post that was written somewhere else - in wp-admin, or before this app existed -
+    /// so it can be edited here from now on. The package comes back knowing its own post id,
+    /// so the next `update` revises that post rather than creating a second copy of it.
+    ///
+    /// The conversion is the WXR importer's, reached through `RemotePostFetcher`, so a post
+    /// pulled off the blog and the same post read from an export file land identically.
+    static func pull(
+        postID: String, fetcher: RemotePostFetcher, siteID: String,
+        into directory: URL, force: Bool, dryRun: Bool
+    ) async throws {
+        let remote = try await fetcher.post(id: postID)
+        var imported = PostImporter.makePost(
+            from: remote.item, attachments: remote.attachments,
+            options: ImportOptions(siteID: siteID)
+        )
+        let post = imported.post
+
+        print("\(post.title)")
+        print("  post \(postID) on site \(siteID), \(imported.report.status)")
+        print("  \(post.blocks.count) blocks, \(imported.images.count) images")
+
+        // A package is an editable document, so pulling over one that already exists would
+        // discard whatever has been written in it. Overwriting has to be asked for.
+        let name = packageName(for: post)
+        let url = directory.appending(path: "\(name).\(PostPackage.fileExtension)")
+        if !force, FileManager.default.fileExists(atPath: url.path) {
+            throw CLIError.message(
+                "\(url.lastPathComponent) already exists. Pass --force to replace it, "
+                + "or use: swiftwriter-publish update \(url.lastPathComponent)"
+            )
+        }
+
+        if dryRun {
+            print("  dry run - would write \(url.path)")
+            return
+        }
+
+        // Downloaded one at a time. A post is a few dozen photographs, and doing it in order
+        // means the count on screen is the truth rather than whatever finished first.
+        var fetched: [ImageID: Data] = [:]
+        var failed: [String] = []
+        let wanted = imported.images.compactMap { image in image.sourceURL.map { (image.id, $0) } }
+        for (index, (imageID, source)) in wanted.enumerated() {
+            do {
+                fetched[imageID] = try await download(source)
+                print("  downloaded \(index + 1)/\(wanted.count) \(source.lastPathComponent)")
+            } catch {
+                failed.append("\(source.lastPathComponent): \(error)")
+            }
+        }
+
+        let assembled = try PackageAssembly.assemble(imported, bytes: fetched)
+        imported.report = assembled.report
+
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try PostPackage.makeFileWrapper(from: assembled.snapshot, previous: nil)
+            .write(to: url, options: .atomic, originalContentsURL: nil)
+
+        print("  wrote \(url.path)")
+        print("  images \(imported.report.imageCount), \(assembled.passedThrough) kept as-is, \(assembled.resized) resized")
+        if imported.report.imagesWithoutAltText > 0 {
+            print("  warning: \(imported.report.imagesWithoutAltText) image(s) have no alt text")
+        }
+        if !imported.report.hasHeroImage { print("  warning: no hero image") }
+        for failure in failed { print("  failed: \(failure)") }
+    }
+
+    /// The photograph as the blog serves it. No cache and no retry: this runs once, for one
+    /// post, and a failure is reported rather than worked around.
+    private static func download(_ url: URL) async throws -> Data {
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let http = response as? HTTPURLResponse else { return data }
+        guard (200..<300).contains(http.statusCode) else {
+            throw CLIError.message("HTTP \(http.statusCode)")
+        }
+        return data
+    }
+
+    /// What to call the file. The slug is the blog's own name for the post, so a pulled
+    /// package sits beside an imported one under the same name.
+    private static func packageName(for post: Post) -> String {
+        if let slug = post.slug, !slug.isEmpty { return slug }
+        let fromTitle = post.title.lowercased()
+            .replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return fromTitle.isEmpty ? "untitled" : fromTitle
     }
 
     // MARK: - The shared path
