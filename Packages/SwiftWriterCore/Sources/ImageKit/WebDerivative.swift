@@ -25,6 +25,10 @@ public struct Derivative: Sendable, Equatable {
 }
 
 public enum WebDerivative {
+    /// Formats a browser can render without help. Anything else is re-encoded as JPEG even
+    /// when it is already small enough, because size is not the only reason to convert.
+    private static let webServable: [UTType] = [.jpeg, .png, .gif, .webP]
+
     /// Produces the web-ready copy that lives inside the package.
     ///
     /// A source that is already within `maxLongEdge` is returned byte for byte. Re-encoding
@@ -40,11 +44,15 @@ public enum WebDerivative {
 
         let width = properties[kCGImagePropertyPixelWidth] as? Int ?? 0
         let height = properties[kCGImagePropertyPixelHeight] as? Int ?? 0
-        let sourceType = CGImageSourceGetType(source) as String?
-        let sourceExtension = sourceType
-            .flatMap { UTType($0)?.preferredFilenameExtension } ?? "jpg"
+        let sourceType = (CGImageSourceGetType(source) as String?).flatMap { UTType($0) }
+        let sourceExtension = sourceType?.preferredFilenameExtension ?? "jpg"
 
-        if max(width, height) <= settings.maxLongEdge {
+        // Passing through is only right when a browser can be handed the file as it is.
+        // A HEIC under the size limit is still a HEIC, and passing it through would put a
+        // file most browsers cannot show into the package and then onto the blog.
+        let servable = sourceType.map { type in webServable.contains(where: type.conforms(to:)) } ?? false
+
+        if servable, max(width, height) <= settings.maxLongEdge {
             return Derivative(
                 data: data,
                 pixelWidth: width,

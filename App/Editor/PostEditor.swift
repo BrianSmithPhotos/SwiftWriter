@@ -36,8 +36,11 @@ struct PostEditor: View {
                     BlockView(block: $block, post: $document.post)
                 }
 
-                if dropper.isImporting {
-                    Label("Reading photographs", systemImage: "photo.badge.plus")
+                if dropper.reading > 0 {
+                    Label(
+                        "Reading ^[\(dropper.reading) photograph](inflect: true)",
+                        systemImage: "photo.badge.plus"
+                    )
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .symbolEffect(.pulse)

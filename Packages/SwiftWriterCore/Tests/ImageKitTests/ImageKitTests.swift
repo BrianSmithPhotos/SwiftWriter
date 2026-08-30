@@ -10,7 +10,8 @@ import PostKit
 private func makeJPEG(
     width: Int,
     height: Int,
-    metadata: [CFString: Any] = [:]
+    metadata: [CFString: Any] = [:],
+    type: UTType = .jpeg
 ) throws -> Data {
     let space = CGColorSpaceCreateDeviceRGB()
     let context = try #require(CGContext(
@@ -27,7 +28,7 @@ private func makeJPEG(
 
     let output = NSMutableData()
     let destination = try #require(CGImageDestinationCreateWithData(
-        output, UTType.jpeg.identifier as CFString, 1, nil
+        output, type.identifier as CFString, 1, nil
     ))
     CGImageDestinationAddImage(destination, image, metadata as CFDictionary)
     #expect(CGImageDestinationFinalize(destination))
@@ -291,5 +292,58 @@ struct ImageImportTests {
             imported("frame", base)
         ])
         #expect(sorted.map(\.asset.fileName) == ["frame", "screenshot"])
+    }
+}
+
+@Suite("Formats a browser cannot be handed")
+struct WebServableTests {
+    @Test("A small HEIC is converted rather than passed through")
+    func convertsHEIC() throws {
+        let heic = try makeJPEG(width: 400, height: 300, type: .heic)
+        let derivative = try WebDerivative.make(from: heic)
+        #expect(derivative.passedThrough == false)
+        #expect(derivative.fileExtension == "jpg")
+        #expect(derivative.pixelWidth == 400)
+        #expect(derivative.pixelHeight == 300)
+    }
+
+    @Test("A small PNG is still passed through, because a browser can show it")
+    func passesThroughPNG() throws {
+        let png = try makeJPEG(width: 400, height: 300, type: .png)
+        let derivative = try WebDerivative.make(from: png)
+        #expect(derivative.passedThrough)
+        #expect(derivative.fileExtension == "png")
+    }
+
+    @Test("An imported HEIC lands in the package as a JPEG")
+    func importedHEICIsJPEG() throws {
+        let imported = try ImageImport.make(from: makeJPEG(width: 400, height: 300, type: .heic))
+        #expect(imported.asset.fileName.hasSuffix(".jpg"))
+    }
+}
+
+@Suite("The trail back to the original")
+struct ProvenanceBookmarkTests {
+    @Test("A bookmark resolves to the file it was taken from")
+    func bookmarkResolves() throws {
+        let url = URL.temporaryDirectory.appending(path: "original-\(UUID().uuidString).jpg")
+        try makeJPEG(width: 300, height: 200).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let data = try #require(ImageImport.bookmark(for: url))
+        var stale = false
+        let resolved = try URL(resolvingBookmarkData: data, bookmarkDataIsStale: &stale)
+        #expect(resolved.standardizedFileURL == url.standardizedFileURL)
+    }
+
+    @Test("A bookmark taken at import is carried into the asset")
+    func bookmarkIsStored() throws {
+        let imported = try ImageImport.make(
+            from: makeJPEG(width: 100, height: 100),
+            originalFileName: "DSCF4259.jpg",
+            bookmarkData: Data([1, 2, 3])
+        )
+        #expect(imported.asset.provenance.bookmarkData == Data([1, 2, 3]))
+        #expect(imported.asset.provenance.originalFileName == "DSCF4259.jpg")
     }
 }
