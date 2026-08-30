@@ -136,11 +136,15 @@ await printSummary()
 
 /// One image off the network, named rather than a tuple.
 ///
-/// A `(ImageID, Data?, String?)` here is miscompiled by the Swift 6.4 beta toolchain at `-O`:
-/// every task group result comes back carrying the *first* task's id, so all 975 downloads
-/// land under one key and the import writes a package with a single photograph. A struct with
-/// the same three fields is correct at every optimisation level. Reproducer and the narrowing
-/// that found it are in the notes; revisit when the toolchain ships.
+/// A tuple here is miscompiled by the Swift 6.4 beta toolchain at `-O`: every task group
+/// result comes back carrying the *first* task's id, so all 975 downloads land under one key
+/// and the import writes a package with a single photograph. Debug builds are correct, which
+/// is what made it so slow to find.
+///
+/// Three things have to coincide: a tuple as the group's result type, a `do`/`catch` around
+/// the `try await` in the child task, and an actor on the other end of that await - which is
+/// `ImageStore`. Dropping any one of them is enough, and a struct is the least surprising to
+/// read. Revisit when the toolchain ships.
 struct FetchedImage: Sendable {
     var id: ImageID
     var data: Data?
