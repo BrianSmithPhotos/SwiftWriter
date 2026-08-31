@@ -17,8 +17,8 @@ then upload a draft, publish, or update what is already live.
 Posts arrive two ways. `swiftwriter-import` reads a whole-blog WXR export; `swiftwriter-publish
 pull` reads a single post straight off the blog, for one written somewhere other than here.
 
-Still to do: publishing has been done from the Mac and not yet tried from the iPad - the
-token is kept on the machine that signed in, so the iPad would need its own.
+Both the Mac and the iPad publish, each signing in to WordPress.com for itself: the token
+is kept on the machine that signed in and is not shared between them.
 
 ## Requirements
 
