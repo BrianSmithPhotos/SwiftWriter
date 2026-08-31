@@ -54,16 +54,27 @@ xcodegen generate
 
 ```sh
 swiftwriter-import   --input export.xml --output Corpus/ --since 2025-01-01
-swiftwriter-alt      <package or directory> [--provider ollama|apple] [--write]
+swiftwriter-alt      <package or directory>... [--provider ollama|apple] [--write]
 swiftwriter-publish  auth | status | draft | update | schedule | backdate  <package>
 swiftwriter-publish  pull <post-id> --output <dir>
 ```
 
+Each tool prints its full option list with `--help`. What follows is only what is easy to
+get wrong.
+
 `swiftwriter-alt` prints and stops unless `--write` is passed, and never touches the blog.
-`swiftwriter-publish` changes nothing live without `--yes`, and `--dry-run` reports exactly
-what a real run would send. `backdate` moves a post that has already gone live back to the
-day its newest photograph was taken. `pull` goes the other way: it reads a post off the
-blog into a new `.swiftpost`, for a post that was written somewhere other than this app.
+It is the only one that takes a batch: several packages, or a directory holding them.
+
+`swiftwriter-publish` takes one package at a time, so a batch is a shell loop. `schedule`
+and `backdate` refuse without `--yes`, and so does `draft` once the post is live. `update`
+does not, on the grounds that it only revises a post already on the blog - worth knowing
+before scripting it. `--dry-run` reports what a real run would send. `backdate` moves a
+post that has gone live back to the day its newest photograph was taken; `pull` goes the
+other way, reading a post off the blog into a new `.swiftpost`.
+
+`swiftwriter-import` reads a whole export in one run. `--dry-run` parses and reports
+without fetching or writing, `--verify` reads every written package back, and `--force`
+overwrites packages that already exist, discarding edits made in the app.
 
 ## Document format
 
@@ -81,6 +92,14 @@ Post Title.swiftpost/
 
 Publishing state is kept separate from content so that recording an upload does not modify
 the post itself.
+
+Packages open from local disk, and from iCloud Drive or Google Drive - both tested, and a
+save that cannot read a photograph fails and leaves the package intact rather than writing
+a hole. Other cloud file providers open too, untested. A network share is refused: saving
+re-reads the images out of the package on disk, and a save that fails partway over SMB can
+unlink the original without landing its replacement, which is how a post was lost. Editing
+one package from two machines at once is untested - close it on one before opening it on
+the other.
 
 ## Publishing
 

@@ -5,9 +5,10 @@ import WordPressProvider
 
 // swiftwriter-publish - put a .swiftpost on the blog.
 //
-// Deliberately explicit about what goes live: `draft` is the only command that needs no
-// extra confirmation, and `publish` and `backdate` both refuse without --yes. Nothing here
-// runs on a schedule; every post leaves the machine because someone asked.
+// Deliberately explicit about what goes live: `schedule` and `backdate` refuse without
+// --yes, and so does `draft` once the post is live. `update` does not, since it only
+// revises a post already on the blog. Nothing here runs on a schedule; every post leaves
+// the machine because someone asked.
 
 let usage = """
 swiftwriter-publish - publish a .swiftpost to WordPress
