@@ -19,46 +19,63 @@ struct SignInSheet: View {
     @State private var model = SignIn()
 
     var body: some View {
-        Form {
-            Section("WordPress.com application") {
-                TextField("Client id", text: $model.credentials.clientID)
-                SecureField("Client secret", text: $model.credentials.clientSecret)
-                TextField("Redirect", text: $model.credentials.redirectURI)
-                TextField("Site id", text: $model.credentials.siteID)
+        // Wrapped in a NavigationStack for the toolbar's sake. On macOS a sheet hosts
+        // toolbar items by itself, so this was invisible there; on iPadOS a
+        // `.confirmationAction` needs a navigation bar to render into, and without one the
+        // sheet came up with no Cancel and no Sign In at all - the fields could be filled in
+        // and there was nothing to press. A tap outside then dismissed the sheet, which read
+        // as the typing being thrown away.
+        NavigationStack {
+            Form {
+                Section("WordPress.com application") {
+                    TextField("Client id", text: $model.credentials.clientID)
+                    SecureField("Client secret", text: $model.credentials.clientSecret)
+                    TextField("Redirect", text: $model.credentials.redirectURI)
+                    TextField("Site id", text: $model.credentials.siteID)
+                }
+                Section {
+                    Text("""
+                        Create an application at developer.wordpress.com/apps and give it the \
+                        redirect above. Approving in the browser sends the answer back to \
+                        SwiftWriter, which stores the token in the Keychain.
+                        """)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                if let message = model.message {
+                    Section { Text(message).font(.caption).foregroundStyle(model.failed ? .orange : .green) }
+                }
             }
-            Section {
-                Text("""
-                    Create an application at developer.wordpress.com/apps and give it the \
-                    redirect above. Approving in the browser sends the answer back to \
-                    SwiftWriter, which stores the token in the Keychain.
-                    """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-            if let message = model.message {
-                Section { Text(message).font(.caption).foregroundStyle(model.failed ? .orange : .green) }
-            }
-        }
-        .formStyle(.grouped)
-        .frame(minWidth: 420, minHeight: 380)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button(model.working ? "Waiting for the browser" : "Sign In") {
-                    Task {
-                        // openURL is asked for here, on the main actor, and handed over as a
-                        // plain closure: the sign-in itself knows nothing about SwiftUI.
-                        if await model.signIn(open: { url in openURL(url) }) {
-                            onSignedIn(model.credentials.siteID)
-                            dismiss()
+            .formStyle(.grouped)
+            .navigationTitle("Sign In to WordPress.com")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(model.working ? "Waiting for the browser" : "Sign In") {
+                        Task {
+                            // openURL is asked for here, on the main actor, and handed over
+                            // as a plain closure: the sign-in itself knows nothing about
+                            // SwiftUI.
+                            if await model.signIn(open: { url in openURL(url) }) {
+                                onSignedIn(model.credentials.siteID)
+                                dismiss()
+                            }
                         }
                     }
+                    .disabled(model.working || !model.credentials.isComplete)
                 }
-                .disabled(model.working || !model.credentials.isComplete)
             }
         }
+        .frame(minWidth: 420, minHeight: 380)
+        // The application registration is a dozen characters of client secret pasted from
+        // somewhere else. Losing it to a stray tap outside the sheet is the one dismissal
+        // that costs real typing, so it has to be Cancel.
+        .interactiveDismissDisabled()
         .task { model.load(siteID: siteID) }
     }
 }
