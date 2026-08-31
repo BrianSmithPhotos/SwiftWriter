@@ -23,7 +23,9 @@ What is known to be missing or unproven, roughly by what it would cost if ignore
 
 ## Publishing
 
-- Backdate the four live August 2026 posts to the day of their newest photograph.
+- **Alt text on the backdated posts.** All four went live with none: 30, 17, 25 and 22
+  photographs undescribed. `swiftwriter-alt --write` then `swiftwriter-publish update`
+  puts it on the blog without touching anything else.
 - `update` revises a live post without `--yes`, while `schedule`, `backdate` and a `draft`
   over a live post all refuse without it. Decide whether that asymmetry is right.
 
